@@ -162,6 +162,7 @@ class RadarMonitorService : Service() {
         }
 
         requestLocationUpdates()
+        overlay.update(0, null)
     }
 
     @SuppressLint("MissingPermission")

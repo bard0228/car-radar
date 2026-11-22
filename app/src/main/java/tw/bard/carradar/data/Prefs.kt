@@ -85,8 +85,12 @@ class Prefs(context: Context) {
         set(v) { sp.edit().putInt("overlay_x", v).apply() }
 
     var overlayY: Int
-        get() = sp.getInt("overlay_y", 220)
+        get() = sp.getInt("overlay_y", 360)
         set(v) { sp.edit().putInt("overlay_y", v).apply() }
+
+    var overlaySide: String
+        get() = sp.getString("overlay_side", "RIGHT") ?: "RIGHT"
+        set(v) { sp.edit().putString("overlay_side", v).apply() }
 
     // 單點靜音清單
     var mutedCameraIds: Set<String>

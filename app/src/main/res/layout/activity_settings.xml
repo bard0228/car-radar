@@ -217,7 +217,7 @@
                 android:id="@+id/switchOverlay"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:text="懸浮膠囊視窗"
+                android:text="懸浮液態球體"
                 android:textColor="@color/text_primary"
                 android:textSize="15sp"
                 android:textStyle="bold" />
