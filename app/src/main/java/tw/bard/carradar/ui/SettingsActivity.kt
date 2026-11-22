@@ -204,7 +204,7 @@ class SettingsActivity : BaseLiquidActivity() {
         val labels = bonded.map { "${it.name ?: "未知裝置"} (${it.address})" }.toTypedArray()
         val checked = BooleanArray(bonded.size) { idx -> selected.contains(bonded[idx].address) }
 
-        AlertDialog.Builder(this)
+        val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this, tw.bard.carradar.R.style.Theme_CarRadar_Dialog)
             .setTitle("選擇車機藍牙裝置")
             .setMultiChoiceItems(labels, checked) { _, which, isChecked ->
                 val addr = bonded[which].address
@@ -215,6 +215,8 @@ class SettingsActivity : BaseLiquidActivity() {
                 updateBtSummary()
             }
             .setNegativeButton("取消", null)
-            .show()
+            .create()
+        dialog.window?.setBackgroundDrawableResource(tw.bard.carradar.R.drawable.bg_glass_dialog)
+        dialog.show()
     }
 }

@@ -24,8 +24,12 @@ class MainActivity : BaseLiquidActivity() {
     private val permLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
-        if (results[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
+        val fine = results[Manifest.permission.ACCESS_FINE_LOCATION] == true
+        val coarse = results[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (fine || coarse || RadarMonitorService.hasLocationPermission(this)) {
             RadarMonitorService.startManual(this)
+        } else {
+            android.widget.Toast.makeText(this, "需要位置權限才能開始測速監控", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -85,7 +89,7 @@ class MainActivity : BaseLiquidActivity() {
                     binding.tvStatusPill.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_secondary))
                     binding.btnToggleMonitor.text = getString(R.string.btn_start)
                     binding.btnToggleMonitor.backgroundTintList =
-                        ColorStateList.valueOf(ContextCompat.getColor(this@MainActivity, R.color.accent_blue))
+                        ColorStateList.valueOf(ContextCompat.getColor(this@MainActivity, R.color.accent_orange))
                 }
 
                 val hud = st.activeHud
@@ -119,8 +123,9 @@ class MainActivity : BaseLiquidActivity() {
 
     private fun ensureLocationAndStart() {
         val needed = mutableListOf<String>()
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        if (!RadarMonitorService.hasLocationPermission(this)) {
             needed.add(Manifest.permission.ACCESS_FINE_LOCATION)
+            needed.add(Manifest.permission.ACCESS_COARSE_LOCATION)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED

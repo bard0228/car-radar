@@ -10,13 +10,16 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.location.Location
+import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.Process
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -92,11 +95,27 @@ class RadarMonitorService : Service() {
             ACTION_START_MANUAL, ACTION_START_BT -> {
                 cancelPendingDisconnectKill()
                 isBtMode = (intent.action == ACTION_START_BT)
-                if (!hasLocationPermission(this)) {
+                val fgType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                } else {
+                    0
+                }
+                try {
+                    ServiceCompat.startForeground(
+                        this,
+                        NOTIF_ID,
+                        buildNotification("測速監控啟動中"),
+                        fgType
+                    )
+                } catch (_: Exception) {
                     stopSelf()
                     return START_NOT_STICKY
                 }
-                startForeground(NOTIF_ID, buildNotification("測速監控啟動中"))
+                if (!hasLocationPermission(this)) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
                 startMonitoringSession()
             }
             ACTION_BT_DISCONNECT -> {
@@ -148,11 +167,13 @@ class RadarMonitorService : Service() {
     @SuppressLint("MissingPermission")
     private fun requestLocationUpdates() {
         if (!hasLocationPermission(this)) return
-        fusedClient.removeLocationUpdates(locationCallback)
-        val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
-            .setMinUpdateIntervalMillis(500L)
-            .build()
-        fusedClient.requestLocationUpdates(req, locationCallback, Looper.getMainLooper())
+        runCatching {
+            fusedClient.removeLocationUpdates(locationCallback)
+            val req = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
+                .setMinUpdateIntervalMillis(500L)
+                .build()
+            fusedClient.requestLocationUpdates(req, locationCallback, Looper.getMainLooper())
+        }
     }
 
     private fun handleLocation(loc: Location) {
@@ -297,7 +318,7 @@ class RadarMonitorService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_radar)
             .setContentTitle(getString(R.string.app_name))
             .setContentText(content)
             .setOngoing(true)
@@ -322,10 +343,15 @@ class RadarMonitorService : Service() {
             private set
 
         fun hasLocationPermission(context: Context): Boolean {
-            return ActivityCompat.checkSelfPermission(
+            val fine = ActivityCompat.checkSelfPermission(
                 context,
                 Manifest.permission.ACCESS_FINE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
+            val coarse = ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+            return fine || coarse
         }
 
         fun startManual(context: Context) {

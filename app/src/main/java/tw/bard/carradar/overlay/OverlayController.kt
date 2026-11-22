@@ -107,10 +107,14 @@ class OverlayController(
             }
         }
 
+        val jakartaBold = runCatching {
+            androidx.core.content.res.ResourcesCompat.getFont(context, tw.bard.carradar.R.font.jakarta_bold)
+        }.getOrNull() ?: Typeface.DEFAULT_BOLD
+
         val tvSpeed = TextView(context).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
             setTextColor(Color.parseColor("#1E293B"))
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = jakartaBold
             fontFeatureSettings = "tnum"
             text = "0"
         }
@@ -124,7 +128,7 @@ class OverlayController(
 
         val tvBadge = TextView(context).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = jakartaBold
             gravity = Gravity.CENTER
             minWidth = dp(38f).toInt()
             minHeight = dp(38f).toInt()
@@ -135,8 +139,8 @@ class OverlayController(
 
         val tvDist = TextView(context).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setTextColor(Color.parseColor("#3B6FD4"))
-            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.parseColor("#D97736"))
+            typeface = jakartaBold
             fontFeatureSettings = "tnum"
             setPadding(dp(8f).toInt(), 0, 0, 0)
             visibility = View.GONE

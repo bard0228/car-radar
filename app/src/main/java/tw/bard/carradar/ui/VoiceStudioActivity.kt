@@ -109,31 +109,42 @@ class VoiceStudioActivity : BaseLiquidActivity() {
     }
 
     private fun showCreatePackDialog() {
+        val pad = (resources.displayMetrics.density * 20).toInt()
+        val container = android.widget.FrameLayout(this).apply {
+            setPadding(pad, pad / 2, pad, 0)
+        }
         val input = EditText(this).apply {
             hint = "例如：我的聲音、朋友阿明"
+            setPadding(pad / 2, pad / 2, pad / 2, pad / 2)
         }
-        AlertDialog.Builder(this)
+        container.addView(input)
+
+        val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this, tw.bard.carradar.R.style.Theme_CarRadar_Dialog)
             .setTitle("新增語音包")
-            .setView(input)
+            .setView(container)
             .setPositiveButton("建立") { _, _ ->
                 val created = voicePacks.createPack(input.text.toString().trim())
                 prefs.activeVoicePackId = created.id
                 refreshUi()
             }
             .setNegativeButton("取消", null)
-            .show()
+            .create()
+        dialog.window?.setBackgroundDrawableResource(tw.bard.carradar.R.drawable.bg_glass_dialog)
+        dialog.show()
     }
 
     private fun showSwitchPackDialog() {
         val packs = voicePacks.listPacks()
         val names = packs.map { it.name }.toTypedArray()
-        AlertDialog.Builder(this)
+        val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this, tw.bard.carradar.R.style.Theme_CarRadar_Dialog)
             .setTitle("選擇語音包")
             .setItems(names) { _, idx ->
                 prefs.activeVoicePackId = packs[idx].id
                 refreshUi()
             }
-            .show()
+            .create()
+        dialog.window?.setBackgroundDrawableResource(tw.bard.carradar.R.drawable.bg_glass_dialog)
+        dialog.show()
     }
 
     private fun startRecording(key: String) {

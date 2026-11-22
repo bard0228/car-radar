@@ -1,14 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg_base">#F0F3F8</color>
-    <color name="bg_surface">#B3FFFFFF</color>
-    <color name="bg_surface_elevated">#D9FFFFFF</color>
-    <color name="glass_stroke">#D6FFFFFF</color>
+    <color name="ic_launcher_bg">#F0EDE6</color>
+
+    <!-- Low-saturation Liquid Glass Palette -->
+    <color name="bg_base">#EEF2F7</color>
+    <color name="bg_surface">#B8FFFFFF</color>
+    <color name="bg_surface_elevated">#DCFFFFFF</color>
+    <color name="glass_stroke">#EBFFFFFF</color>
+
     <color name="text_primary">#1E293B</color>
     <color name="text_secondary">#64748B</color>
-    <color name="accent_blue">#3B6FD4</color>
-    <color name="accent_teal">#0D9488</color>
-    <color name="alert_red">#DC2626</color>
-    <color name="alert_amber">#D97706</color>
-    <color name="pill_dark">#CC1E293B</color>
+
+    <!-- Desaturated Orange (replaces all Material purple) & Muted Slate Blue -->
+    <color name="accent_orange">#D97736</color>
+    <color name="accent_orange_soft">#F7E3D4</color>
+    <color name="accent_orange_deep">#8A4315</color>
+    <color name="accent_blue">#4B73B5</color>
+    <color name="accent_teal">#2D8A82</color>
+    <color name="alert_red">#C94A4A</color>
+    <color name="track_inactive">#D8E0EB</color>
 </resources>

@@ -20,24 +20,25 @@
         android:orientation="horizontal"
         android:padding="16dp">
 
-        <com.google.android.material.button.MaterialButton
+        <ImageButton
             android:id="@+id/btnBack"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
+            android:layout_width="48dp"
             android:layout_height="48dp"
-            android:backgroundTint="#D9FFFFFF"
-            android:text="返回"
-            android:textColor="@color/text_primary" />
+            android:background="@drawable/bg_glass_pill"
+            android:contentDescription="返回"
+            android:padding="12dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_arrow_back" />
 
         <TextView
             android:id="@+id/tvMapInfo"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="10dp"
             android:layout_weight="1"
             android:background="@drawable/bg_glass_pill"
-            android:paddingHorizontal="14dp"
-            android:paddingVertical="10dp"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="12dp"
             android:text="載入點位中..."
             android:textColor="@color/text_primary"
             android:textSize="13sp" />
@@ -77,7 +78,7 @@
             android:layout_width="match_parent"
             android:layout_height="48dp"
             android:layout_marginTop="14dp"
-            android:backgroundTint="@color/accent_blue"
+            android:backgroundTint="@color/accent_orange"
             android:text="這個點不用報"
             android:textColor="#FFFFFF" />
     </LinearLayout>

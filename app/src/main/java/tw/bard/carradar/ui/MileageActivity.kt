@@ -29,14 +29,16 @@ class MileageActivity : BaseLiquidActivity() {
 
         binding.btnBack.setOnClickListener { finish() }
         binding.btnClearAll.setOnClickListener {
-            AlertDialog.Builder(this)
+            val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this, tw.bard.carradar.R.style.Theme_CarRadar_Dialog)
                 .setTitle("清空所有里程紀錄？")
                 .setPositiveButton("確定") { _, _ ->
                     store.clearAll()
                     reload()
                 }
                 .setNegativeButton("取消", null)
-                .show()
+                .create()
+            dialog.window?.setBackgroundDrawableResource(tw.bard.carradar.R.drawable.bg_glass_dialog)
+            dialog.show()
         }
 
         adapter = MileageAdapter()

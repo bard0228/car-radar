@@ -52,6 +52,8 @@ class MapActivity : BaseLiquidActivity() {
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             val locOverlay = MyLocationNewOverlay(GpsMyLocationProvider(this), binding.mapView)
+            locOverlay.setDirectionIcon(createBlueArrowBitmap())
+            locOverlay.setPersonIcon(createBlueDotBitmap())
             locOverlay.enableMyLocation()
             locOverlay.enableFollowLocation()
             binding.mapView.overlays.add(locOverlay)
@@ -156,5 +158,50 @@ class MapActivity : BaseLiquidActivity() {
     override fun onPause() {
         super.onPause()
         binding.mapView.onPause()
+    }
+
+    private fun createBlueArrowBitmap(): android.graphics.Bitmap {
+        val size = (resources.displayMetrics.density * 34).toInt()
+        val bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bmp)
+        val cx = size / 2f
+        val path = android.graphics.Path().apply {
+            moveTo(cx, size * 0.08f)
+            lineTo(size * 0.86f, size * 0.86f)
+            lineTo(cx, size * 0.68f)
+            lineTo(size * 0.14f, size * 0.86f)
+            close()
+        }
+        val stroke = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.WHITE
+            style = android.graphics.Paint.Style.STROKE
+            strokeWidth = size * 0.10f
+            strokeJoin = android.graphics.Paint.Join.ROUND
+        }
+        val fill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#2563EB")
+            style = android.graphics.Paint.Style.FILL
+        }
+        canvas.drawPath(path, stroke)
+        canvas.drawPath(path, fill)
+        return bmp
+    }
+
+    private fun createBlueDotBitmap(): android.graphics.Bitmap {
+        val size = (resources.displayMetrics.density * 24).toInt()
+        val bmp = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bmp)
+        val c = size / 2f
+        val white = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.WHITE
+            style = android.graphics.Paint.Style.FILL
+        }
+        val blue = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            color = android.graphics.Color.parseColor("#2563EB")
+            style = android.graphics.Paint.Style.FILL
+        }
+        canvas.drawCircle(c, c, size * 0.44f, white)
+        canvas.drawCircle(c, c, size * 0.30f, blue)
+        return bmp
     }
 }

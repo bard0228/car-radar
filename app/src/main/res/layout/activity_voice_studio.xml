@@ -14,17 +14,20 @@
         android:orientation="horizontal"
         android:paddingBottom="12dp">
 
-        <com.google.android.material.button.MaterialButton
+        <ImageButton
             android:id="@+id/btnBack"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
+            android:layout_width="48dp"
             android:layout_height="48dp"
-            android:text="返回"
-            android:textColor="@color/text_primary" />
+            android:background="@drawable/bg_glass_pill"
+            android:contentDescription="返回"
+            android:padding="12dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_arrow_back" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
             android:layout_weight="1"
             android:text="語音包與錄音室"
             android:textColor="@color/text_primary"
