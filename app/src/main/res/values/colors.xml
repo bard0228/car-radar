@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_base">#F0F3F8</color>
+    <color name="bg_surface">#B3FFFFFF</color>
+    <color name="bg_surface_elevated">#D9FFFFFF</color>
+    <color name="glass_stroke">#D6FFFFFF</color>
+    <color name="text_primary">#1E293B</color>
+    <color name="text_secondary">#64748B</color>
+    <color name="accent_blue">#3B6FD4</color>
+    <color name="accent_teal">#0D9488</color>
+    <color name="alert_red">#DC2626</color>
+    <color name="alert_amber">#D97706</color>
+    <color name="pill_dark">#CC1E293B</color>
+</resources>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">荷包守護者</string>
+    <string name="channel_monitor_name">測速監控</string>
+    <string name="status_idle">待命</string>
+    <string name="status_monitoring">監控中</string>
+    <string name="status_bt_active">車機連線監控中</string>
+    <string name="btn_start">開始監控</string>
+    <string name="btn_stop">停止監控</string>
+    <string name="nav_dashboard">儀表板</string>
+    <string name="nav_map">地圖</string>
+    <string name="nav_voice">語音室</string>
+    <string name="nav_mileage">里程</string>
+    <string name="nav_settings">設定</string>
+</resources>

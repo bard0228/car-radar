@@ -1,0 +1,3 @@
+﻿cityname,regionname,address,deptnm,branchnm,"violation types",longitude,latitude,direct,limit
+新北市,永和區,新北環河高架保生路匝道處（往中和）,新北市政府警察局,交通大隊,超速,121.504739,25.013285,東北向西南,50
+新北市,永和區,環河東路2段10號（往中和或永和方向）,新北市政府警察局,交通大隊,超速,121.522182,25.013402,西北向東南,50
