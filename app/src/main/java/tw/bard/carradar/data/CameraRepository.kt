@@ -26,7 +26,7 @@ class CameraRepository(private val context: Context) {
         } else {
             context.assets.open("cameras.json").bufferedReader(Charsets.UTF_8).use { it.readText() }
         }
-        parseCamerasJson(camJsonStr, result)
+        result.addAll(parseCamerasJsonStatic(camJsonStr))
 
         // 2. Load enforcement CSVs from assets/enforcement/
         val csvFiles = context.assets.list("enforcement") ?: emptyArray()
@@ -42,30 +42,7 @@ class CameraRepository(private val context: Context) {
 
     suspend fun loadZones(): List<IntervalZone> = withContext(Dispatchers.IO) {
         val jsonStr = context.assets.open("zones.json").bufferedReader(Charsets.UTF_8).use { it.readText() }
-        val root = JSONObject(jsonStr)
-        val arr = root.optJSONArray("zones") ?: return@withContext emptyList()
-        val list = ArrayList<IntervalZone>(arr.length())
-        for (i in 0 until arr.length()) {
-            val o = arr.getJSONObject(i)
-            val a = o.getJSONArray("a")
-            val b = o.getJSONArray("b")
-            val head = if (o.isNull("head")) null else o.getDouble("head").toFloat()
-            list.add(
-                IntervalZone(
-                    id = o.getString("id"),
-                    name = o.optString("name", "區間測速"),
-                    limitKmh = o.optInt("limit", 60),
-                    lenM = o.optInt("len", 0),
-                    aLat = a.getDouble(0),
-                    aLon = a.getDouble(1),
-                    bLat = b.getDouble(0),
-                    bLon = b.getDouble(1),
-                    headingDeg = head,
-                    bidirectional = o.optBoolean("both", true)
-                )
-            )
-        }
-        list
+        parseZonesJson(jsonStr)
     }
 
     /**
@@ -92,41 +69,6 @@ class CameraRepository(private val context: Context) {
             cachedCamerasFile.writeText(parsed.second, Charsets.UTF_8)
             prefs.lastDataSyncMs = System.currentTimeMillis()
             parsed.first
-        }
-    }
-
-    private fun parseCamerasJson(jsonStr: String, out: MutableList<CameraPoint>) {
-        val root = JSONObject(jsonStr)
-        val arr = root.optJSONArray("cameras") ?: return
-        for (i in 0 until arr.length()) {
-            val row = arr.getJSONArray(i)
-            val lat = row.getDouble(0)
-            val lon = row.getDouble(1)
-            val limit = row.optInt(2, 0)
-            val dir = row.optString(3, "")
-            val addr = row.optString(4, "")
-            val city = row.optString(5, "")
-            val town = row.optString(6, "")
-            val (heading, bidir) = parseDirection(dir)
-            val kind = when {
-                limit > 0 -> CameraKind.SPEED
-                addr.contains("闖紅燈") -> CameraKind.RED_LIGHT
-                else -> CameraKind.SPEED
-            }
-            out.add(
-                CameraPoint(
-                    id = "cam_${i}_${"%.5f".format(lat)}_${"%.5f".format(lon)}",
-                    lat = lat,
-                    lon = lon,
-                    limitKmh = limit,
-                    directionText = dir,
-                    address = if (town.isNotBlank() && !addr.contains(town)) "$town$addr" else addr,
-                    city = city,
-                    kind = kind,
-                    headingDeg = heading,
-                    bidirectional = bidir
-                )
-            )
         }
     }
 
@@ -269,5 +211,101 @@ class CameraRepository(private val context: Context) {
         }
         out.add(sb.toString())
         return out
+    }
+
+    companion object {
+        fun parseZonesJson(jsonStr: String): List<IntervalZone> {
+            val root = JSONObject(jsonStr)
+            val arr = root.optJSONArray("zones") ?: return emptyList()
+            val list = ArrayList<IntervalZone>(arr.length())
+            for (i in 0 until arr.length()) {
+                runCatching {
+                    val o = arr.getJSONObject(i)
+                    val a = o.optJSONArray("a") ?: return@runCatching
+                    val b = o.optJSONArray("b") ?: return@runCatching
+                    if (a.length() < 2 || b.length() < 2) return@runCatching
+                    val head = if (o.isNull("head")) null else o.optDouble("head").toFloat()
+                    list.add(
+                        IntervalZone(
+                            id = o.optString("id", "zone_$i"),
+                            name = o.optString("name", "區間測速"),
+                            limitKmh = o.optInt("limit", 60),
+                            lenM = o.optInt("len", 0),
+                            aLat = a.getDouble(0),
+                            aLon = a.getDouble(1),
+                            bLat = b.getDouble(0),
+                            bLon = b.getDouble(1),
+                            headingDeg = head,
+                            bidirectional = o.optBoolean("both", true)
+                        )
+                    )
+                }
+            }
+            return list
+        }
+
+        fun parseCamerasJsonStatic(jsonStr: String): List<CameraPoint> {
+            val out = ArrayList<CameraPoint>(2000)
+            val root = JSONObject(jsonStr)
+            val arr = root.optJSONArray("cameras") ?: return out
+            for (i in 0 until arr.length()) {
+                runCatching {
+                    val row = arr.getJSONArray(i)
+                    if (row.length() < 2) return@runCatching
+                    val lat = row.getDouble(0)
+                    val lon = row.getDouble(1)
+                    val limit = row.optInt(2, 0)
+                    val dir = row.optString(3, "")
+                    val addr = row.optString(4, "")
+                    val city = row.optString(5, "")
+                    val town = row.optString(6, "")
+                    val (heading, bidir) = parseDirectionStatic(dir)
+                    val kind = when {
+                        limit > 0 -> CameraKind.SPEED
+                        addr.contains("闖紅燈") -> CameraKind.RED_LIGHT
+                        else -> CameraKind.SPEED
+                    }
+                    out.add(
+                        CameraPoint(
+                            id = "cam_${i}_${"%.5f".format(lat)}_${"%.5f".format(lon)}",
+                            lat = lat,
+                            lon = lon,
+                            limitKmh = limit,
+                            directionText = dir,
+                            address = if (town.isNotBlank() && !addr.contains(town)) "$town$addr" else addr,
+                            city = city,
+                            kind = kind,
+                            headingDeg = heading,
+                            bidirectional = bidir
+                        )
+                    )
+                }
+            }
+            return out
+        }
+
+        private fun parseDirectionStatic(dir: String): Pair<Float?, Boolean> {
+            val d = dir.trim()
+            if (d.isEmpty() || d.contains("雙向") || d.contains("多向")) {
+                val base = when {
+                    d.contains("南北") -> 0f
+                    d.contains("東西") -> 90f
+                    else -> null
+                }
+                return base to true
+            }
+            val heading = when {
+                d.contains("北") && d.contains("東") -> 45f
+                d.contains("南") && d.contains("東") -> 135f
+                d.contains("南") && d.contains("西") -> 225f
+                d.contains("北") && d.contains("西") -> 315f
+                d.contains("北") -> 0f
+                d.contains("東") -> 90f
+                d.contains("南") -> 180f
+                d.contains("西") -> 270f
+                else -> null
+            }
+            return heading to (heading == null)
+        }
     }
 }

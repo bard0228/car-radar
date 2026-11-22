@@ -95,6 +95,10 @@ class RadarMonitorService : Service() {
             ACTION_START_MANUAL, ACTION_START_BT -> {
                 cancelPendingDisconnectKill()
                 isBtMode = (intent.action == ACTION_START_BT)
+                if (!hasLocationPermission(this)) {
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
                 val fgType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
                 } else {
@@ -109,11 +113,6 @@ class RadarMonitorService : Service() {
                     )
                 } catch (e: Exception) {
                     tw.bard.carradar.data.CrashLogStore(this).recordThrowable("FGS_START", e)
-                    stopSelf()
-                    return START_NOT_STICKY
-                }
-                if (!hasLocationPermission(this)) {
-                    stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
                     return START_NOT_STICKY
                 }
