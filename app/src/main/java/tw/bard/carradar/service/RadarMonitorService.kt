@@ -107,7 +107,8 @@ class RadarMonitorService : Service() {
                         buildNotification("測速監控啟動中"),
                         fgType
                     )
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    tw.bard.carradar.data.CrashLogStore(this).recordThrowable("FGS_START", e)
                     stopSelf()
                     return START_NOT_STICKY
                 }

@@ -34,13 +34,15 @@
             android:textSize="20sp"
             android:textStyle="bold" />
 
-        <com.google.android.material.button.MaterialButton
+        <ImageButton
             android:id="@+id/btnClearAll"
-            style="@style/Widget.Material3.Button.TextButton"
-            android:layout_width="wrap_content"
+            android:layout_width="48dp"
             android:layout_height="48dp"
-            android:text="清空"
-            android:textColor="@color/alert_red" />
+            android:background="@drawable/bg_glass_pill"
+            android:contentDescription="清空"
+            android:padding="12dp"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_trash" />
     </LinearLayout>
 
     <LinearLayout

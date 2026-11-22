@@ -148,6 +148,10 @@ class SettingsActivity : BaseLiquidActivity() {
                 }
             }
         }
+
+        binding.btnCrashLogs.setOnClickListener {
+            startActivity(Intent(this, CrashLogActivity::class.java))
+        }
     }
 
     private fun updateDistLabels() {

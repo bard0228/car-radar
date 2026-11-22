@@ -119,6 +119,28 @@ class MainActivity : BaseLiquidActivity() {
         super.onResume()
         val currentSession = MonitorStateBus.state.value.sessionKm
         binding.tvTotalKm.text = "${"%.1f".format(mileageStore.totalKm() + currentSession)} km"
+        checkUnreadCrashLog()
+    }
+
+    private fun checkUnreadCrashLog() {
+        val crashStore = tw.bard.carradar.data.CrashLogStore(this)
+        if (!crashStore.hasUnread()) return
+        crashStore.markRead()
+        val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this, R.style.Theme_CarRadar_Dialog)
+            .setTitle("偵測到異常閃退")
+            .setMessage("已記錄上次閃退的完整錯誤訊息，您可以直接複製或查看詳情。")
+            .setPositiveButton("複製錯誤") { _, _ ->
+                val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("CarRadarCrashLog", crashStore.readAll()))
+                android.widget.Toast.makeText(this, "已複製錯誤記錄", android.widget.Toast.LENGTH_SHORT).show()
+            }
+            .setNeutralButton("查看詳情") { _, _ ->
+                startActivity(Intent(this, CrashLogActivity::class.java))
+            }
+            .setNegativeButton("關閉", null)
+            .create()
+        dialog.window?.setBackgroundDrawableResource(R.drawable.bg_glass_dialog)
+        dialog.show()
     }
 
     private fun ensureLocationAndStart() {

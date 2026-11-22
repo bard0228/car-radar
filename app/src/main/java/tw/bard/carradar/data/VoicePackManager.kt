@@ -27,8 +27,10 @@ class VoicePackManager(private val context: Context) {
     private val packsRoot = File(context.applicationContext.filesDir, "voice_packs").apply { mkdirs() }
     private val metaFile = File(packsRoot, "packs.json")
 
+    private val builtInIds = BUILT_IN_PACKS.map { it.id }.toSet()
+
     fun listPacks(): List<VoicePack> {
-        val list = mutableListOf(VoicePack(DEFAULT_PACK_ID, "預設台灣男聲", true))
+        val list = BUILT_IN_PACKS.toMutableList()
         if (metaFile.exists()) {
             runCatching {
                 val arr = JSONArray(metaFile.readText(Charsets.UTF_8))
@@ -52,14 +54,14 @@ class VoicePackManager(private val context: Context) {
     }
 
     fun deletePack(packId: String) {
-        if (packId == DEFAULT_PACK_ID) return
+        if (builtInIds.contains(packId)) return
         File(packsRoot, packId).deleteRecursively()
         val remaining = listPacks().filterNot { it.isBuiltIn || it.id == packId }
         saveCustomPacks(remaining)
     }
 
     fun hasCustomClip(packId: String, key: String): Boolean {
-        if (packId == DEFAULT_PACK_ID) return false
+        if (builtInIds.contains(packId)) return false
         return findCustomFile(packId, key) != null
     }
 
@@ -84,13 +86,14 @@ class VoicePackManager(private val context: Context) {
     }
 
     fun resolveClip(packId: String, key: String): VoiceClipSource {
-        if (packId != DEFAULT_PACK_ID) {
-            val custom = findCustomFile(packId, key)
-            if (custom != null && custom.exists() && custom.length() > 0) {
-                return VoiceClipSource.LocalFile(custom)
-            }
+        if (builtInIds.contains(packId)) {
+            return VoiceClipSource.Asset("voice/$packId/$key.m4a")
         }
-        return VoiceClipSource.Asset("voice/default_male/$key.m4a")
+        val custom = findCustomFile(packId, key)
+        if (custom != null && custom.exists() && custom.length() > 0) {
+            return VoiceClipSource.LocalFile(custom)
+        }
+        return VoiceClipSource.Asset("voice/$DEFAULT_PACK_ID/$key.m4a")
     }
 
     private fun findCustomFile(packId: String, key: String): File? {
@@ -116,6 +119,15 @@ class VoicePackManager(private val context: Context) {
 
     companion object {
         const val DEFAULT_PACK_ID = "default_male"
+
+        val BUILT_IN_PACKS = listOf(
+            VoicePack("default_male", "男聲 1 · 台灣沉穩", true),
+            VoicePack("male_yunxi", "男聲 2 · 陽光青年", true),
+            VoicePack("male_yunyang", "男聲 3 · 磁性播報", true),
+            VoicePack("female_hsiaochen", "女聲 1 · 台灣溫柔", true),
+            VoicePack("female_hsiaoyu", "女聲 2 · 台灣甜美", true),
+            VoicePack("female_xiaoxiao", "女聲 3 · 清晰知性", true)
+        )
 
         val SLOTS = listOf(
             PhraseSlot("30", "速限 30"),

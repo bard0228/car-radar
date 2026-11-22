@@ -102,7 +102,7 @@ class VoiceStudioActivity : BaseLiquidActivity() {
 
     private fun ensureWritablePackId(): String {
         val current = prefs.activeVoicePackId
-        if (current != VoicePackManager.DEFAULT_PACK_ID) return current
+        if (VoicePackManager.BUILT_IN_PACKS.none { it.id == current }) return current
         val created = voicePacks.createPack("我的聲音")
         prefs.activeVoicePackId = created.id
         return created.id
