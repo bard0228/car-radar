@@ -33,11 +33,11 @@ class Prefs(context: Context) {
 
     // 預警距離滑桿
     var lowSpeedDistM: Int
-        get() = sp.getInt("dist_low_m", 300)
+        get() = sp.getInt("dist_low_m", 200)
         set(v) { sp.edit().putInt("dist_low_m", v).apply() }
 
     var midSpeedDistM: Int
-        get() = sp.getInt("dist_mid_m", 500)
+        get() = sp.getInt("dist_mid_m", 300)
         set(v) { sp.edit().putInt("dist_mid_m", v).apply() }
 
     var highSpeedDistM: Int
@@ -45,7 +45,7 @@ class Prefs(context: Context) {
         set(v) { sp.edit().putInt("dist_high_m", v).apply() }
 
     var techDistM: Int
-        get() = sp.getInt("dist_tech_m", 250)
+        get() = sp.getInt("dist_tech_m", 200)
         set(v) { sp.edit().putInt("dist_tech_m", v).apply() }
 
     fun alertDistancesConfig(): AlertDistancesConfig = AlertDistancesConfig(

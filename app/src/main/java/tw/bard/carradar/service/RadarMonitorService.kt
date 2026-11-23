@@ -67,6 +67,7 @@ class RadarMonitorService : Service() {
     private var cameras: List<CameraPoint> = emptyList()
     private var zones: List<IntervalZone> = emptyList()
     private var isBtMode: Boolean = false
+    private var lastValidHeadingDeg: Float? = null
     private var pendingDisconnectKill: Runnable? = null
 
     private val locationCallback = object : LocationCallback() {
@@ -231,7 +232,10 @@ class RadarMonitorService : Service() {
 
     private fun handleLocation(loc: Location) {
         val speedKmh = if (loc.hasSpeed()) loc.speed * 3.6f else 0f
-        val heading = if (loc.hasBearing() && speedKmh >= 5f) loc.bearing else null
+        if (loc.hasBearing() && speedKmh >= 8f) {
+            lastValidHeadingDeg = loc.bearing
+        }
+        val heading = lastValidHeadingDeg
 
         alerter.distConfig = prefs.alertDistancesConfig()
         val sessionKm = mileageCalc.onLocation(loc.latitude, loc.longitude, speedKmh, loc.time.takeIf { it > 0 } ?: System.currentTimeMillis())

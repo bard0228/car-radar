@@ -82,10 +82,10 @@ data class IntervalZone(
 }
 
 data class AlertDistancesConfig(
-    val lowSpeedDistM: Int = 300,
-    val midSpeedDistM: Int = 500,
+    val lowSpeedDistM: Int = 200,
+    val midSpeedDistM: Int = 300,
     val highSpeedDistM: Int = 500,
-    val techDistM: Int = 250
+    val techDistM: Int = 200
 ) {
     fun distanceFor(camera: CameraPoint, speedKmh: Float): Double {
         if (camera.limitKmh <= 0) {

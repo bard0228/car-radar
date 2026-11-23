@@ -65,10 +65,10 @@ class SettingsActivity : BaseLiquidActivity() {
         updateBtSummary()
 
         // Distance Sliders
-        binding.sliderLow.value = prefs.lowSpeedDistM.toFloat().coerceIn(150f, 1200f)
-        binding.sliderMid.value = prefs.midSpeedDistM.toFloat().coerceIn(150f, 1200f)
-        binding.sliderHigh.value = prefs.highSpeedDistM.toFloat().coerceIn(150f, 1200f)
-        binding.sliderTech.value = prefs.techDistM.toFloat().coerceIn(150f, 800f)
+        binding.sliderLow.value = prefs.lowSpeedDistM.toFloat().coerceIn(100f, 1200f)
+        binding.sliderMid.value = prefs.midSpeedDistM.toFloat().coerceIn(100f, 1200f)
+        binding.sliderHigh.value = prefs.highSpeedDistM.toFloat().coerceIn(100f, 1200f)
+        binding.sliderTech.value = prefs.techDistM.toFloat().coerceIn(100f, 800f)
         updateDistLabels()
 
         binding.sliderLow.addOnChangeListener { _, v, _ ->
