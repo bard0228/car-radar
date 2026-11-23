@@ -119,6 +119,7 @@ class MainActivity : BaseLiquidActivity() {
         super.onResume()
         val currentSession = MonitorStateBus.state.value.sessionKm
         binding.tvTotalKm.text = "${"%.1f".format(mileageStore.totalKm() + currentSession)} km"
+        RadarMonitorService.restoreOverlay(this)
         checkUnreadCrashLog()
     }
 

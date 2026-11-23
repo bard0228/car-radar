@@ -202,6 +202,31 @@
                     android:text="純混音不壓低音樂"
                     android:textColor="@color/text_primary" />
             </RadioGroup>
+
+            <TextView
+                android:id="@+id/tvVolume"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum"
+                android:paddingTop="10dp"
+                android:text="語音播報音量：100%"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/sliderVolume"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:stepSize="5"
+                android:valueFrom="10"
+                android:valueTo="100" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnTestVolume"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="試聽播報音量" />
         </LinearLayout>
 
         <!-- Overlay Card -->

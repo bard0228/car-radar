@@ -102,6 +102,8 @@ class RadarAudioPlayer(
                 true
             }
             mp.prepare()
+            val vol = prefs.voiceVolumePct / 100f
+            mp.setVolume(vol, vol)
             mp.start()
         } catch (_: Exception) {
             stopCurrentPlayer()

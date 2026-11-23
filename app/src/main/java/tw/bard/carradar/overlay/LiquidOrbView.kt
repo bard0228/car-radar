@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RadialGradient
 import android.graphics.RectF
 import android.graphics.Shader
@@ -21,9 +22,9 @@ import kotlin.math.sqrt
 
 /**
  * Ultra-smooth Liquid Glass Water-Ball View:
- * - Zero polygon/Path.op artifacts: 100% pure hardware-antialiased ovals & gradients.
- * - Subtle jelly squash & stretch when dragged or snapping to edge.
- * - Typography hierarchy: Bottom speed limit (32sp) > Top current speed (21sp),
+ * - Pure hardware-antialiased oval water-ball with subtle jelly wobble.
+ * - Smooth concave liquid surface-tension water bridge when peeling from screen edge (0..48dp).
+ * - Typography: Bottom speed limit (32sp) > Top current speed (21sp),
  *   Middle remaining distance (14.5sp bold, dark slate #334155) with crisp divider lines.
  */
 class LiquidOrbView(
@@ -44,12 +45,17 @@ class LiquidOrbView(
 
     private val tmpRect = RectF()
     private val sheenRect = RectF()
+    private val bridgePath = Path()
 
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
     }
 
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+
+    private val bridgeFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
     }
 
@@ -139,7 +145,12 @@ class LiquidOrbView(
         )
         canvas.drawCircle(cx, cy + dp(2.5f), shadowRadius, shadowPaint)
 
-        // 2. Smooth Water-Ball Shell (rotated & gently squashed/stretched, 100% pure oval)
+        // 2. Smooth Edge Peel Liquid Water Bridge (drawn cleanly behind the orb while peeling)
+        if (physics.isPeelingFromEdge && physics.peelStretchPx > 1f) {
+            drawEdgePeelBridge(canvas, cx, cy, r, isOverspeed)
+        }
+
+        // 3. Smooth Water-Ball Shell (100% pure hardware-antialiased oval)
         canvas.save()
         if (wobbleMag > 0.002f) {
             canvas.rotate(wobbleDeg, cx, cy)
@@ -148,7 +159,6 @@ class LiquidOrbView(
 
         tmpRect.set(cx - r, cy - r, cx + r, cy + r)
 
-        // Liquid Glass Frosted Fill
         fillPaint.shader = LinearGradient(
             cx - r,
             cy - r,
@@ -180,8 +190,36 @@ class LiquidOrbView(
 
         canvas.restore()
 
-        // 3. Typography (Strictly 0° horizontal, Tabular numbers, anchored at center)
+        // 4. Typography (Strictly 0° horizontal, Tabular numbers, anchored at center)
         drawTypography(canvas, cx, cy, r, morph, hudForStyle, isOverspeed)
+    }
+
+    /**
+     * Smooth concave quadratic Bézier water bridge connecting the orb to the screen edge
+     * while pulling inward up to the 48dp snap-off threshold.
+     */
+    private fun drawEdgePeelBridge(canvas: Canvas, cx: Float, cy: Float, r: Float, isOverspeed: Boolean) {
+        val ratio = (physics.peelStretchPx / physics.snapOffPx).coerceIn(0f, 1f)
+        val isLeft = physics.snappedSide == OrbSide.LEFT
+        val wallX = if (isLeft) -windowOriginX else (physics.bounds.screenW - windowOriginX)
+
+        val footHalfH = r * (0.86f - 0.48f * ratio)
+        val neckPinchY = r * (0.48f - 0.36f * ratio)
+        val midX = (wallX + cx) * 0.5f
+
+        bridgePath.reset()
+        bridgePath.moveTo(wallX, cy - footHalfH)
+        bridgePath.quadTo(midX, cy - neckPinchY, cx, cy - r * 0.72f)
+        bridgePath.lineTo(cx, cy + r * 0.72f)
+        bridgePath.quadTo(midX, cy + neckPinchY, wallX, cy + footHalfH)
+        bridgePath.close()
+
+        bridgeFillPaint.color = if (isOverspeed) {
+            Color.parseColor("#D8FDE2E2")
+        } else {
+            Color.parseColor("#DCEAF0F9")
+        }
+        canvas.drawPath(bridgePath, bridgeFillPaint)
     }
 
     private fun drawTypography(
@@ -193,18 +231,17 @@ class LiquidOrbView(
         hud: ActiveCameraHud?,
         isOverspeed: Boolean
     ) {
-        // 1. Top: Current Speed (26sp centered in Idle -> shrinks to 21sp on top in Alert Expanded so Limit is larger)
+        // Top: Current Speed (26sp centered in Idle -> 21sp on top in Alert Expanded so Limit is larger)
         speedPaint.textSize = sp(26f - 5f * morph)
         speedPaint.color = if (isOverspeed) Color.parseColor("#C94A4A") else Color.parseColor("#1E293B")
         val speedCenterY = cy - r * 0.48f * morph
         drawCenteredText(canvas, speedKmh.toString(), cx, speedCenterY, speedPaint)
 
-        // 2. Middle Distance Divider & Bottom Speed Limit (fade in smoothly with morphProgress)
+        // Middle Distance & Bottom Speed Limit
         if (morph > 0.12f && hud != null) {
             val alphaFloat = ((morph - 0.12f) / 0.88f).coerceIn(0f, 1f)
             val alphaInt = (alphaFloat * 255).toInt()
 
-            // Middle: Larger & Darker Remaining Distance (14.5sp Bold, #334155) + crisp divider lines
             val distText = "${hud.distanceM}m"
             val distCenterY = cy - r * 0.04f
             distPaint.textSize = sp(14.5f)
@@ -219,7 +256,6 @@ class LiquidOrbView(
                 canvas.drawLine(cx + textHalfW, distCenterY, cx + lineOuterX, distCenterY, dividerPaint)
             }
 
-            // Bottom: Speed Limit (32sp Bold — prominently LARGER than top current speed!)
             val label = hud.camera.displayLabel()
             val isNumeric = hud.camera.limitKmh > 0
             limitPaint.textSize = if (isNumeric) sp(32f) else sp(16.5f)

@@ -134,6 +134,11 @@ class RadarMonitorService : Service() {
                     }
                 }
             }
+            ACTION_RESTORE_OVERLAY -> {
+                if (isRunning) {
+                    overlay.restoreFromForeground()
+                }
+            }
         }
         return START_STICKY
     }
@@ -338,6 +343,7 @@ class RadarMonitorService : Service() {
         const val ACTION_BT_DISCONNECT = "tw.bard.carradar.ACTION_BT_DISCONNECT"
         const val ACTION_STOP_MANUAL = "tw.bard.carradar.ACTION_STOP_MANUAL"
         const val ACTION_RELOAD_DATA = "tw.bard.carradar.ACTION_RELOAD_DATA"
+        const val ACTION_RESTORE_OVERLAY = "tw.bard.carradar.ACTION_RESTORE_OVERLAY"
 
         @Volatile
         var isRunning: Boolean = false
@@ -380,6 +386,12 @@ class RadarMonitorService : Service() {
         fun reloadData(context: Context) {
             if (!isRunning) return
             val i = Intent(context, RadarMonitorService::class.java).setAction(ACTION_RELOAD_DATA)
+            runCatching { context.startService(i) }
+        }
+
+        fun restoreOverlay(context: Context) {
+            if (!isRunning) return
+            val i = Intent(context, RadarMonitorService::class.java).setAction(ACTION_RESTORE_OVERLAY)
             runCatching { context.startService(i) }
         }
     }

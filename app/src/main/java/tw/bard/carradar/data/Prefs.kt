@@ -63,10 +63,14 @@ class Prefs(context: Context) {
         }
         set(v) { sp.edit().putString("audio_focus_mode", v.name).apply() }
 
-    // 語音包選擇
+    // 語音包與音量
     var activeVoicePackId: String
         get() = sp.getString("active_voice_pack", "default_male") ?: "default_male"
         set(v) { sp.edit().putString("active_voice_pack", v).apply() }
+
+    var voiceVolumePct: Int
+        get() = sp.getInt("voice_volume_pct", 100).coerceIn(10, 100)
+        set(v) { sp.edit().putInt("voice_volume_pct", v.coerceIn(10, 100)).apply() }
 
     // 懸浮視窗
     var overlayEnabled: Boolean

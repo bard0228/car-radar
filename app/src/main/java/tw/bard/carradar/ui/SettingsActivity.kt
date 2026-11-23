@@ -88,11 +88,25 @@ class SettingsActivity : BaseLiquidActivity() {
             updateDistLabels()
         }
 
-        // Audio focus
+        // Audio focus & volume
         if (prefs.audioFocusMode == AudioFocusMode.DUCK) binding.rbDuck.isChecked = true
         else binding.rbMix.isChecked = true
         binding.rgAudioFocus.setOnCheckedChangeListener { _, checkedId ->
             prefs.audioFocusMode = if (checkedId == binding.rbMix.id) AudioFocusMode.MIX else AudioFocusMode.DUCK
+        }
+        binding.sliderVolume.value = prefs.voiceVolumePct.toFloat().coerceIn(10f, 100f)
+        binding.tvVolume.text = "語音播報音量：${prefs.voiceVolumePct}%"
+        binding.sliderVolume.addOnChangeListener { _, v, _ ->
+            prefs.voiceVolumePct = v.toInt()
+            binding.tvVolume.text = "語音播報音量：${prefs.voiceVolumePct}%"
+        }
+        val testPlayer = tw.bard.carradar.audio.RadarAudioPlayer(
+            this,
+            prefs,
+            tw.bard.carradar.data.VoicePackManager(this)
+        )
+        binding.btnTestVolume.setOnClickListener {
+            testPlayer.playPhrases(listOf("80"))
         }
 
         // Overlay
