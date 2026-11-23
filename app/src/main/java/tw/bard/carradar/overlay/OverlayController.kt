@@ -7,7 +7,6 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
-import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.WindowInsets
@@ -17,13 +16,12 @@ import tw.bard.carradar.data.OverlayDisplayMode
 import tw.bard.carradar.data.Prefs
 import tw.bard.carradar.ui.MainActivity
 import kotlin.math.ceil
-import kotlin.math.floor
+import kotlin.math.roundToInt
 
 /**
- * Manages the WindowManager host for the Floating Liquid Orb.
- * Syncs LiquidOrbPhysics (screen-space single source of truth) into a tightly bounded
- * WindowManager layout so it never clips shadows/bridges/teardrops and never swallows
- * unrelated taps on apps underneath.
+ * High-FPS WindowManager host for the Floating Liquid Water-Ball.
+ * Uses constant window width/height during drag & animation (updating ONLY x/y)
+ * so SurfaceFlinger never reallocates the GPU buffer mid-drag -> instant 1:1 finger tracking!
  */
 class OverlayController(
     private val context: Context,
@@ -41,6 +39,7 @@ class OverlayController(
     private var lastHud: ActiveCameraHud? = null
     private var lastSpeed: Int = 0
     private var pendingHideAfterRetract: Boolean = false
+    private var isTightIdleWindow: Boolean = false
 
     private val frameRunnable = object : Runnable {
         override fun run() {
@@ -58,14 +57,7 @@ class OverlayController(
             lastFrameMs = now
 
             val stillAnimating = phys.step(dtSec)
-            if (phys.consumeSnapOffHaptic()) {
-                view.performHapticFeedback(
-                    HapticFeedbackConstants.CLOCK_TICK,
-                    HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
-                )
-            }
-
-            syncWindowToPhysics(view, phys, force = false)
+            syncWindowPositionOnly(view, phys)
             view.invalidate()
 
             if (stillAnimating) {
@@ -73,14 +65,16 @@ class OverlayController(
             } else {
                 isLoopRunning = false
                 lastFrameMs = 0L
-                // Persist settled side & Y
                 prefs.overlaySide = phys.snappedSide.name
                 prefs.overlayY = phys.centerY.toInt()
-                // Tighten window bounds once settled
-                syncWindowToPhysics(view, phys, force = true)
-                if (pendingHideAfterRetract && !phys.isAlertActive && phys.morphProgress <= 0.01f) {
-                    pendingHideAfterRetract = false
-                    hide()
+                // Tighten window size once settled in idle to minimize touch footprint
+                if (!phys.isAlertActive && phys.morphProgress <= 0.01f) {
+                    if (pendingHideAfterRetract) {
+                        pendingHideAfterRetract = false
+                        hide()
+                        return
+                    }
+                    setWindowSizeMode(view, phys, tightIdle = true)
                 }
             }
         }
@@ -102,10 +96,12 @@ class OverlayController(
             if (hud != null) {
                 pendingHideAfterRetract = false
                 ensureAttached()
-                orbView?.updateHud(speedKmh, hud)
+                val v = orbView ?: return
+                val p = physics ?: return
+                setWindowSizeMode(v, p, tightIdle = false)
+                v.updateHud(speedKmh, hud)
                 startAnimationLoop()
             } else if (orbView != null) {
-                // Smoothly retract to idle orb first, then hide
                 pendingHideAfterRetract = true
                 orbView?.updateHud(speedKmh, null)
                 startAnimationLoop()
@@ -116,7 +112,12 @@ class OverlayController(
         // OverlayDisplayMode.ALWAYS
         pendingHideAfterRetract = false
         ensureAttached()
-        orbView?.updateHud(speedKmh, hud)
+        val v = orbView ?: return
+        val p = physics ?: return
+        if (hud != null) {
+            setWindowSizeMode(v, p, tightIdle = false)
+        }
+        v.updateHud(speedKmh, hud)
         startAnimationLoop()
     }
 
@@ -161,9 +162,13 @@ class OverlayController(
         view.speedKmh = lastSpeed
         view.activeHud = lastHud
 
+        val startTight = (lastHud == null)
+        val sizePx = windowSizePx(phys, startTight)
+        isTightIdleWindow = startTight
+
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            sizePx,
+            sizePx,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
@@ -177,6 +182,10 @@ class OverlayController(
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     phys.updateBounds(computeSafeBounds())
+                    // Expand window once on touch down if needed, keeping width/height fixed for entire drag!
+                    if (isTightIdleWindow) {
+                        setWindowSizeMode(view, phys, tightIdle = false)
+                    }
                     velocityTracker?.recycle()
                     velocityTracker = VelocityTracker.obtain().apply { addMovement(ev) }
                     lastMoveMs = SystemClock.uptimeMillis()
@@ -190,13 +199,8 @@ class OverlayController(
                     val dt = ((now - lastMoveMs) / 1000f).coerceIn(0.004f, 0.05f)
                     lastMoveMs = now
                     phys.onTouchMove(ev.rawX, ev.rawY, dt)
-                    if (phys.consumeSnapOffHaptic()) {
-                        view.performHapticFeedback(
-                            HapticFeedbackConstants.CLOCK_TICK,
-                            HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING
-                        )
-                    }
-                    syncWindowToPhysics(view, phys, force = false)
+                    // Pure x/y translation — zero buffer reallocation -> 1:1 instant finger tracking
+                    syncWindowPositionOnly(view, phys)
                     view.invalidate()
                     startAnimationLoop()
                     true
@@ -209,7 +213,7 @@ class OverlayController(
                     velocityTracker?.recycle()
                     velocityTracker = null
 
-                    val wasTap = phys.onTouchUp(ev.rawX, ev.rawY, vx, vy)
+                    val wasTap = phys.onTouchUp(vx, vy)
                     if (wasTap) {
                         val i = Intent(context, MainActivity::class.java).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -227,7 +231,7 @@ class OverlayController(
         orbView = view
         layoutParams = params
 
-        computeWindowRect(phys, params, view)
+        applyCenteredWindowPosition(view, phys, params)
         runCatching {
             wm.addView(view, params)
         }.onFailure {
@@ -237,52 +241,45 @@ class OverlayController(
         }
     }
 
-    private fun syncWindowToPhysics(view: LiquidOrbView, phys: LiquidOrbPhysics, force: Boolean) {
+    private fun windowSizePx(phys: LiquidOrbPhysics, tightIdle: Boolean): Int {
+        val pad = 18f * phys.density
+        val baseDia = if (tightIdle) phys.idleRadiusPx * 2f else phys.expandedRadiusPx * 2f
+        // Extra 16% room for subtle jelly wobble & soft shadow
+        return ceil(baseDia * 1.16f + pad * 2f).toInt()
+    }
+
+    private fun setWindowSizeMode(view: LiquidOrbView, phys: LiquidOrbPhysics, tightIdle: Boolean) {
+        val params = layoutParams ?: return
+        if (isTightIdleWindow == tightIdle) return
+        isTightIdleWindow = tightIdle
+        val sizePx = windowSizePx(phys, tightIdle)
+        params.width = sizePx
+        params.height = sizePx
+        applyCenteredWindowPosition(view, phys, params)
+        runCatching { wm.updateViewLayout(view, params) }
+    }
+
+    private fun syncWindowPositionOnly(view: LiquidOrbView, phys: LiquidOrbPhysics) {
         val params = layoutParams ?: return
         val oldX = params.x
         val oldY = params.y
-        val oldW = params.width
-        val oldH = params.height
-
-        computeWindowRect(phys, params, view)
-        if (force || params.x != oldX || params.y != oldY || params.width != oldW || params.height != oldH) {
+        applyCenteredWindowPosition(view, phys, params)
+        if (params.x != oldX || params.y != oldY) {
             runCatching { wm.updateViewLayout(view, params) }
         }
     }
 
-    private fun computeWindowRect(
+    private fun applyCenteredWindowPosition(
+        view: LiquidOrbView,
         phys: LiquidOrbPhysics,
-        params: WindowManager.LayoutParams,
-        view: LiquidOrbView
+        params: WindowManager.LayoutParams
     ) {
-        val d = phys.density
-        val r = phys.currentRadiusPx()
-        val shadowPad = 14f * d
-        val tearPad = if (phys.isDragging || phys.teardropFactor > 0.02f) (phys.maxSwayPx + phys.gravityDropPx + 12f * d) else 0f
-        val peelPadLeft = if (phys.isPeelingFromEdge && phys.snappedSide == OrbSide.LEFT) phys.peelStretchPx + 12f * d else 0f
-        val peelPadRight = if (phys.isPeelingFromEdge && phys.snappedSide == OrbSide.RIGHT) phys.peelStretchPx + 12f * d else 0f
-
-        var left = phys.centerX - r - shadowPad - tearPad - peelPadLeft
-        var right = phys.centerX + r + shadowPad + tearPad + peelPadRight
-        var top = phys.centerY - r - shadowPad - tearPad
-        var bottom = phys.centerY + r + shadowPad + tearPad
-
-        // Keep window cleanly anchored to 0..screenW when snapped so edge bridge reaches x=0 / screenW
-        if (left < 0f) left = 0f
-        if (right > phys.bounds.screenW) right = phys.bounds.screenW
-        if (top < 0f) top = 0f
-        if (bottom > phys.bounds.screenH) bottom = phys.bounds.screenH
-
-        val winX = floor(left).toInt()
-        val winY = floor(top).toInt()
-        val winW = ceil(right - winX).toInt().coerceAtLeast(1)
-        val winH = ceil(bottom - winY).toInt().coerceAtLeast(1)
-
+        val halfW = params.width * 0.5f
+        val halfH = params.height * 0.5f
+        val winX = (phys.centerX - halfW).roundToInt()
+        val winY = (phys.centerY - halfH).roundToInt()
         params.x = winX
         params.y = winY
-        params.width = winW
-        params.height = winH
-
         view.windowOriginX = winX.toFloat()
         view.windowOriginY = winY.toFloat()
     }

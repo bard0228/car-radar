@@ -122,7 +122,7 @@ class VoicePackManager(private val context: Context) {
 
         val BUILT_IN_PACKS = listOf(
             VoicePack("default_male", "男聲 1 · 台灣沉穩", true),
-            VoicePack("male_yunxi", "男聲 2 · 陽光青年", true),
+            VoicePack("male_yunxi", "男聲 2 · 典禮司儀", true),
             VoicePack("male_yunyang", "男聲 3 · 磁性播報", true),
             VoicePack("female_hsiaochen", "女聲 1 · 台灣溫柔", true),
             VoicePack("female_hsiaoyu", "女聲 2 · 台灣甜美", true),
