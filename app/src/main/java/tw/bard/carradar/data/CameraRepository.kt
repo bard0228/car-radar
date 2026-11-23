@@ -20,6 +20,9 @@ class CameraRepository(private val context: Context) {
     suspend fun loadCameras(): List<CameraPoint> = withContext(Dispatchers.IO) {
         val result = ArrayList<CameraPoint>(2400)
 
+        // 0. Load user-created custom cameras first (never overwritten by online sync)
+        result.addAll(CustomCameraStore(context).listAll())
+
         // 1. Load fixed speed cameras (prefer online updated JSON if present)
         val camJsonStr = if (cachedCamerasFile.exists()) {
             cachedCamerasFile.readText(Charsets.UTF_8)
