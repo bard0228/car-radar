@@ -99,7 +99,9 @@ class RadarMonitorService : Service() {
                     stopSelf()
                     return START_NOT_STICKY
                 }
-                val fgType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val fgType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
                 } else {
                     0
@@ -113,6 +115,21 @@ class RadarMonitorService : Service() {
                     )
                 } catch (e: Exception) {
                     tw.bard.carradar.data.CrashLogStore(this).recordThrowable("FGS_START", e)
+                    // Fallback on Android 14+: if launched from BT in background without "Allow all the time" location,
+                    // start as connectedDevice FGS and prompt user to grant background location instead of failing silently.
+                    if (isBtMode && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        val fallbackStarted = runCatching {
+                            ServiceCompat.startForeground(
+                                this,
+                                NOTIF_ID,
+                                buildNotification("請點此開啟「位置一律允許」以支援藍牙背景自動測速"),
+                                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                            )
+                        }.isSuccess
+                        if (fallbackStarted) {
+                            return START_NOT_STICKY
+                        }
+                    }
                     stopSelf()
                     return START_NOT_STICKY
                 }
@@ -359,6 +376,14 @@ class RadarMonitorService : Service() {
                 Manifest.permission.ACCESS_COARSE_LOCATION
             ) == PackageManager.PERMISSION_GRANTED
             return fine || coarse
+        }
+
+        fun hasBackgroundLocationPermission(context: Context): Boolean {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return true
+            return ActivityCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
         }
 
         fun startManual(context: Context) {

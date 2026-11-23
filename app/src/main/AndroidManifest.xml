@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -62,7 +63,7 @@
         <service
             android:name=".service.RadarMonitorService"
             android:exported="false"
-            android:foregroundServiceType="location" />
+            android:foregroundServiceType="location|connectedDevice" />
 
         <receiver
             android:name=".receiver.BluetoothReceiver"

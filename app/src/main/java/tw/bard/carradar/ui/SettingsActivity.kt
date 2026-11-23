@@ -128,8 +128,14 @@ class SettingsActivity : BaseLiquidActivity() {
         }
 
         // Background location & battery optimization
+        updatePermissionLabels()
         binding.btnBgLocation.setOnClickListener {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (!RadarMonitorService.hasLocationPermission(this)) {
+                Toast.makeText(this, "請先在權限頁開啟位置並設為「一律允許」", Toast.LENGTH_SHORT).show()
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 bgLocLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
             }
         }
@@ -166,6 +172,19 @@ class SettingsActivity : BaseLiquidActivity() {
         binding.btnCrashLogs.setOnClickListener {
             startActivity(Intent(this, CrashLogActivity::class.java))
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updatePermissionLabels()
+    }
+
+    private fun updatePermissionLabels() {
+        val hasBg = RadarMonitorService.hasBackgroundLocationPermission(this)
+        binding.btnBgLocation.text = if (hasBg) "背景位置：已一律允許" else "背景位置：尚未一律允許 (點此開啟)"
+        val pm = getSystemService(PowerManager::class.java)
+        val noOpt = pm.isIgnoringBatteryOptimizations(packageName)
+        binding.btnBatteryOpt.text = if (noOpt) "電池最佳化：已關閉" else "關閉電池最佳化 (防背景中斷)"
     }
 
     private fun updateDistLabels() {
