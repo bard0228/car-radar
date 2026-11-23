@@ -99,39 +99,69 @@ class RadarMonitorService : Service() {
                     stopSelf()
                     return START_NOT_STICKY
                 }
-                val fgType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-                } else {
-                    0
-                }
-                try {
-                    ServiceCompat.startForeground(
-                        this,
-                        NOTIF_ID,
-                        buildNotification("測速監控啟動中"),
-                        fgType
-                    )
-                } catch (e: Exception) {
-                    tw.bard.carradar.data.CrashLogStore(this).recordThrowable("FGS_START", e)
-                    // Fallback on Android 14+: if launched from BT in background without "Allow all the time" location,
-                    // start as connectedDevice FGS and prompt user to grant background location instead of failing silently.
-                    if (isBtMode && Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                        val fallbackStarted = runCatching {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    if (isBtMode) {
+                        // 1. Always start with CONNECTED_DEVICE first: Android 14~17 allows ACL_CONNECTED
+                        // to start connectedDevice FGS from background without FGS_LOCATION rejection.
+                        try {
                             ServiceCompat.startForeground(
                                 this,
                                 NOTIF_ID,
-                                buildNotification("請點此開啟「位置一律允許」以支援藍牙背景自動測速"),
+                                buildNotification(
+                                    if (hasBackgroundLocationPermission(this)) "車機藍牙測速啟動中"
+                                    else "請開啟「位置一律允許」以背景測速"
+                                ),
                                 ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
                             )
-                        }.isSuccess
-                        if (fallbackStarted) {
+                        } catch (e: Exception) {
+                            tw.bard.carradar.data.CrashLogStore(this).recordThrowable("FGS_BT_START", e)
+                            stopSelf()
+                            return START_NOT_STICKY
+                        }
+                        // 2. Best-effort upgrade to LOCATION|CONNECTED_DEVICE if eligible
+                        if (hasBackgroundLocationPermission(this)) {
+                            runCatching {
+                                ServiceCompat.startForeground(
+                                    this,
+                                    NOTIF_ID,
+                                    buildNotification("車機藍牙測速監控中"),
+                                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                                )
+                            }
+                        }
+                    } else {
+                        // Manual start from foreground activity
+                        try {
+                            ServiceCompat.startForeground(
+                                this,
+                                NOTIF_ID,
+                                buildNotification("測速監控啟動中"),
+                                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                            )
+                        } catch (e: Exception) {
+                            tw.bard.carradar.data.CrashLogStore(this).recordThrowable("FGS_START", e)
+                            stopSelf()
                             return START_NOT_STICKY
                         }
                     }
-                    stopSelf()
-                    return START_NOT_STICKY
+                } else {
+                    val fgType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                    } else {
+                        0
+                    }
+                    try {
+                        ServiceCompat.startForeground(
+                            this,
+                            NOTIF_ID,
+                            buildNotification("測速監控啟動中"),
+                            fgType
+                        )
+                    } catch (e: Exception) {
+                        tw.bard.carradar.data.CrashLogStore(this).recordThrowable("FGS_START", e)
+                        stopSelf()
+                        return START_NOT_STICKY
+                    }
                 }
                 startMonitoringSession()
             }
