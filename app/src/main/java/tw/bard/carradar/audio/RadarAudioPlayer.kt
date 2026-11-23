@@ -5,6 +5,7 @@ import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.media.audiofx.LoudnessEnhancer
 import android.os.Handler
 import android.os.Looper
 import tw.bard.carradar.data.AudioFocusMode
@@ -22,6 +23,7 @@ class RadarAudioPlayer(
     private val mainHandler = Handler(Looper.getMainLooper())
     private val queue = ConcurrentLinkedQueue<String>()
     private var currentPlayer: MediaPlayer? = null
+    private var currentEnhancer: LoudnessEnhancer? = null
     private var currentFocusRequest: AudioFocusRequest? = null
     private var isPlaying = false
 
@@ -102,8 +104,23 @@ class RadarAudioPlayer(
                 true
             }
             mp.prepare()
-            val vol = prefs.voiceVolumePct / 100f
-            mp.setVolume(vol, vol)
+
+            // Volume mapping: 0..60% -> 0.0..1.0 base volume (60% == old 100%)
+            // 61..100% -> 1.0 base volume + LoudnessEnhancer up to +1200 mB (+12 dB)
+            val pct = prefs.voiceVolumePct.coerceIn(10, 100)
+            if (pct <= 60) {
+                val vol = (pct / 60f).coerceIn(0.1f, 1.0f)
+                mp.setVolume(vol, vol)
+            } else {
+                mp.setVolume(1.0f, 1.0f)
+                val boostMb = (((pct - 60) / 40f) * 1200f).toInt()
+                runCatching {
+                    val enhancer = LoudnessEnhancer(mp.audioSessionId)
+                    enhancer.setTargetGain(boostMb)
+                    enhancer.enabled = true
+                    currentEnhancer = enhancer
+                }
+            }
             mp.start()
         } catch (_: Exception) {
             stopCurrentPlayer()
@@ -112,6 +129,13 @@ class RadarAudioPlayer(
     }
 
     private fun stopCurrentPlayer() {
+        runCatching {
+            currentEnhancer?.apply {
+                enabled = false
+                release()
+            }
+        }
+        currentEnhancer = null
         runCatching {
             currentPlayer?.apply {
                 if (isPlaying) stop()
