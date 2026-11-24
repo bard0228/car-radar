@@ -159,10 +159,14 @@ class SettingsActivity : BaseLiquidActivity() {
                 val res = repo.refreshFromOpenData(prefs)
                 binding.btnUpdateData.isEnabled = true
                 binding.btnUpdateData.text = "線上更新政府測速點資料"
-                res.onSuccess { count ->
+                res.onSuccess { summary ->
                     RadarMonitorService.reloadData(this@SettingsActivity)
                     updateSyncLabel()
-                    Toast.makeText(this@SettingsActivity, "已更新 $count 筆測速資料", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this@SettingsActivity,
+                        "已更新：固定測速 ${summary.fixedCount} 筆 ＋ 科技執法 ${summary.techCount} 筆（自訂 ${summary.customCount} 筆已保留）",
+                        Toast.LENGTH_LONG
+                    ).show()
                 }.onFailure { err ->
                     Toast.makeText(this@SettingsActivity, "更新失敗：${err.message}", Toast.LENGTH_SHORT).show()
                 }

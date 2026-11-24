@@ -28,7 +28,7 @@ data class ActiveCameraHud(
 class CameraAlerter(
     private val aheadToleranceDeg: Float = 28f,
     private val maxLateralOffsetM: Double = 32.0,
-    private val directionToleranceDeg: Float = 60f,
+    private val directionToleranceDeg: Float = 65f,
     private val turnAwayDeg: Float = 60f,
     private val minSpeedKmh: Float = 10f,
     private val passWithinM: Double = 65.0,
@@ -40,12 +40,23 @@ class CameraAlerter(
     private val stage = HashMap<String, Int>()
     private val minDist = HashMap<String, Double>()
 
+    // Expressway / Elevated road state machine
+    var isExpresswayMode: Boolean = false
+        private set
+    private var inExpresswayCorridor: Boolean = false
+    private var fastSinceMs: Long = 0L
+    private var slowSinceMs: Long = 0L
+
     var isMuted: (CameraPoint) -> Boolean = { false }
     var distConfig: AlertDistancesConfig = AlertDistancesConfig()
 
     fun reset() {
         stage.clear()
         minDist.clear()
+        isExpresswayMode = false
+        inExpresswayCorridor = false
+        fastSinceMs = 0L
+        slowSinceMs = 0L
     }
 
     fun update(
@@ -53,8 +64,11 @@ class CameraAlerter(
         lat: Double,
         lon: Double,
         speedKmh: Float,
-        headingDeg: Float?
+        headingDeg: Float?,
+        nowMs: Long = System.currentTimeMillis()
     ): Pair<RadarAlertEvent?, ActiveCameraHud?> {
+        updateExpresswayMode(speedKmh, nowMs)
+
         // Never blindly alert 360° if we haven't acquired any valid heading yet
         if (headingDeg == null) {
             return null to null
@@ -85,11 +99,15 @@ class CameraAlerter(
                     val didPassDirectly = prevMin <= passWithinM && d >= prevMin + passMarginM
                     if (didPassDirectly) {
                         stage[cam.id] = 2
+                        if (cam.roadLevel == RoadLevel.EXPRESSWAY) {
+                            isExpresswayMode = true
+                            inExpresswayCorridor = true
+                            slowSinceMs = 0L
+                        }
                         if (emittedEvent == null) {
                             emittedEvent = RadarAlertEvent.Passed(cam, d)
                         }
                     } else {
-                        // Turn-away fast dismiss: turned away > 60° or moved away before reaching 65m -> silently retract without "通過"
                         val bearing = GeoMath.bearingDeg(lat, lon, cam.lat, cam.lon)
                         val turnedAway = GeoMath.angleDiffDeg(headingDeg, bearing) > turnAwayDeg
                         val movedAway = d >= prevMin + turnAwayMarginM
@@ -101,7 +119,7 @@ class CameraAlerter(
             }
         }
 
-        // 2. Find nearest camera within triggerDist & narrow corridor -> sync HUD expansion + single APPROACH alert
+        // 2. Find nearest eligible camera within triggerDist & narrow corridor
         val sortedNearby = nearby.sortedBy { it.second }
         var hudCamera: ActiveCameraHud? = null
 
@@ -109,11 +127,18 @@ class CameraAlerter(
             val st = stage[cam.id] ?: 0
             if (st >= 2) continue
 
+            // Filter out surface-road cameras when driving on an expressway/elevated road
+            if (shouldSuppressSurfaceCamera(cam)) continue
+
             val triggerDist = distConfig.distanceFor(cam, speedKmh)
-            // HUD expansion is 100% synchronized with triggerDist (no 890m premature expansion!)
             if (d > triggerDist) continue
 
             if (!isInAheadCorridor(lat, lon, d, headingDeg, cam)) continue
+
+            if (cam.roadLevel == RoadLevel.EXPRESSWAY && d <= 200.0 && speedKmh >= 65f) {
+                inExpresswayCorridor = true
+                isExpresswayMode = true
+            }
 
             if (hudCamera == null) {
                 hudCamera = ActiveCameraHud(cam, d.toInt())
@@ -129,6 +154,42 @@ class CameraAlerter(
         }
 
         return emittedEvent to hudCamera
+    }
+
+    private fun updateExpresswayMode(speedKmh: Float, nowMs: Long) {
+        if (speedKmh >= 75f) {
+            slowSinceMs = 0L
+            if (fastSinceMs == 0L) fastSinceMs = nowMs
+            if (nowMs - fastSinceMs >= 5_000L) {
+                isExpresswayMode = true
+            }
+        } else {
+            fastSinceMs = 0L
+            if (speedKmh < 55f) {
+                if (slowSinceMs == 0L) slowSinceMs = nowMs
+                if (nowMs - slowSinceMs >= 6_000L) {
+                    isExpresswayMode = false
+                    inExpresswayCorridor = false
+                }
+            } else {
+                slowSinceMs = 0L
+            }
+        }
+    }
+
+    /**
+     * In Expressway Mode:
+     * - Never suppress EXPRESSWAY cameras (even 60 km/h off-ramp cameras).
+     * - Suppress SURFACE red-light / pure tech enforcement (no speed limit) and <= 50 km/h city cameras.
+     * - If confirmed inside an expressway corridor, also suppress SURFACE 60 km/h cameras directly underneath.
+     */
+    private fun shouldSuppressSurfaceCamera(cam: CameraPoint): Boolean {
+        if (!isExpresswayMode) return false
+        if (cam.roadLevel == RoadLevel.EXPRESSWAY) return false
+        if (cam.limitKmh <= 0) return true // Pure red light or intersection tech enforcement
+        if (cam.limitKmh <= 50) return true // City surface street speed camera
+        if (inExpresswayCorridor && cam.limitKmh <= 60) return true
+        return false
     }
 
     private fun isInAheadCorridor(

@@ -150,4 +150,47 @@ class RadarCoreTest {
         assertTrue(record.startTime.matches(Regex("\\d{2}:\\d{2}")))
         assertTrue(record.endTime.matches(Regex("\\d{2}:\\d{2}")))
     }
+
+    @Test
+    fun `expressway mode suppresses surface tech and 50kmh cameras but still alerts expressway cameras`() {
+        val alerter = CameraAlerter()
+        val surfaceRedLight = CameraPoint(
+            id = "s_red", lat = 25.0015, lon = 121.5000, limitKmh = 0,
+            directionText = "雙向", address = "中山路路口", city = "台北市",
+            kind = CameraKind.RED_LIGHT, roadLevel = RoadLevel.SURFACE
+        )
+        val surface50 = CameraPoint(
+            id = "s_50", lat = 25.0016, lon = 121.5000, limitKmh = 50,
+            directionText = "雙向", address = "平面道路50", city = "台北市",
+            kind = CameraKind.SPEED, roadLevel = RoadLevel.SURFACE
+        )
+        val express80 = CameraPoint(
+            id = "e_80", lat = 25.0030, lon = 121.5000, limitKmh = 80,
+            directionText = "北向", address = "台74線快速道路", city = "台中市",
+            kind = CameraKind.SPEED, headingDeg = 0f, bidirectional = false,
+            roadLevel = RoadLevel.EXPRESSWAY
+        )
+
+        val t0 = 1_000_000L
+        // Sustain >= 75 km/h for 6 seconds -> enters Expressway Mode
+        alerter.update(emptyList(), 24.9900, 121.5000, 88f, 0f, t0)
+        alerter.update(emptyList(), 24.9950, 121.5000, 90f, 0f, t0 + 6_000L)
+        assertTrue("Should enter expressway mode", alerter.isExpresswayMode)
+
+        // Surface red-light & 50 km/h underneath expressway MUST be suppressed
+        val (eSurf, hudSurf) = alerter.update(listOf(surfaceRedLight, surface50), 25.0005, 121.5000, 90f, 0f, t0 + 8_000L)
+        assertNull(eSurf)
+        assertNull(hudSurf)
+
+        // Expressway 80 km/h camera MUST still alert
+        val (eExp, hudExp) = alerter.update(listOf(express80), 25.0005, 121.5000, 90f, 0f, t0 + 9_000L)
+        assertTrue(eExp is RadarAlertEvent.Approach)
+        assertEquals(listOf("80"), eExp?.phraseKeys)
+        assertNotNull(hudExp)
+
+        // Slow down < 55 km/h for 7 seconds (exited ramp onto surface street) -> exits Expressway Mode
+        alerter.update(emptyList(), 25.0005, 121.5000, 40f, 0f, t0 + 20_000L)
+        alerter.update(emptyList(), 25.0005, 121.5000, 35f, 0f, t0 + 27_000L)
+        assertFalse("Should return to surface mode", alerter.isExpresswayMode)
+    }
 }

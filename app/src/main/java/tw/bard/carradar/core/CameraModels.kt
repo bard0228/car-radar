@@ -6,6 +6,11 @@ enum class CameraKind {
     TECH         // 科技執法 (無速限，統稱)
 }
 
+enum class RoadLevel {
+    SURFACE,     // 一般平面道路 / 市區路口
+    EXPRESSWAY   // 國道 / 快速道路 / 高架橋 / 匝道
+}
+
 data class CameraPoint(
     val id: String,
     val lat: Double,
@@ -17,7 +22,8 @@ data class CameraPoint(
     val kind: CameraKind,
     val headingDeg: Float? = null,
     val bidirectional: Boolean = true,
-    val techDetail: String = ""
+    val techDetail: String = "",
+    val roadLevel: RoadLevel = RoadLevel.SURFACE
 ) {
     /**
      * 方案甲：
