@@ -106,14 +106,21 @@ class LiquidOrbView(
         invalidate()
     }
 
+    private val screenLoc = IntArray(2)
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
         val r = physics.currentRadiusPx()
         val morph = physics.morphProgress.coerceIn(0f, 1f)
 
-        val cx = physics.centerX - windowOriginX
-        val cy = physics.centerY - windowOriginY
+        // Read actual SurfaceFlinger window origin to guarantee 0-frame desync during idle <-> expanded resize
+        getLocationOnScreen(screenLoc)
+        val originX = if (screenLoc[0] != 0 || windowOriginX == 0f) screenLoc[0].toFloat() else windowOriginX
+        val originY = if (screenLoc[1] != 0 || windowOriginY == 0f) screenLoc[1].toFloat() else windowOriginY
+
+        val cx = physics.centerX - originX
+        val cy = physics.centerY - originY
 
         val hudForStyle = activeHud ?: if (morph > 0.02f) lastDisplayHud else null
         val isOverspeed = hudForStyle != null &&

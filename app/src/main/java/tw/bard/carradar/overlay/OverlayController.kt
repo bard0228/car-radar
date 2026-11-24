@@ -53,6 +53,7 @@ class OverlayController(
     private var lastHud: ActiveCameraHud? = null
     private var lastSpeed: Int = 0
     private var pendingHideAfterRetract: Boolean = false
+    private var isTightIdleWindow: Boolean = false
 
     @Volatile
     var isTemporarilyDismissed: Boolean = false
@@ -84,9 +85,14 @@ class OverlayController(
                 lastFrameMs = 0L
                 prefs.overlaySide = phys.snappedSide.name
                 prefs.overlayY = phys.centerY.toInt()
-                if (!phys.isAlertActive && phys.morphProgress <= 0.01f && pendingHideAfterRetract) {
-                    pendingHideAfterRetract = false
-                    hide()
+                if (!phys.isAlertActive && phys.morphProgress <= 0.01f) {
+                    if (pendingHideAfterRetract) {
+                        pendingHideAfterRetract = false
+                        hide()
+                        return
+                    }
+                    // Shrink touchable window to match small Idle Orb so nearby home screen icons remain clickable
+                    setWindowSizeMode(view, phys, tightIdle = true)
                 }
             }
         }
@@ -115,7 +121,10 @@ class OverlayController(
             if (hud != null) {
                 pendingHideAfterRetract = false
                 ensureAttached()
-                orbView?.updateHud(speedKmh, hud)
+                val v = orbView ?: return
+                val p = physics ?: return
+                setWindowSizeMode(v, p, tightIdle = false)
+                v.updateHud(speedKmh, hud)
                 startAnimationLoop()
             } else if (orbView != null) {
                 pendingHideAfterRetract = true
@@ -128,7 +137,12 @@ class OverlayController(
         // OverlayDisplayMode.ALWAYS
         pendingHideAfterRetract = false
         ensureAttached()
-        orbView?.updateHud(speedKmh, hud)
+        val v = orbView ?: return
+        val p = physics ?: return
+        if (hud != null) {
+            setWindowSizeMode(v, p, tightIdle = false)
+        }
+        v.updateHud(speedKmh, hud)
         startAnimationLoop()
     }
 
@@ -174,8 +188,9 @@ class OverlayController(
         view.speedKmh = lastSpeed
         view.activeHud = lastHud
 
-        // Constant fixed square window size: NEVER resized after addView -> zero 1-frame jump!
-        val sizePx = fixedWindowSizePx(phys)
+        val startTight = (lastHud == null)
+        val sizePx = windowSizePx(phys, startTight)
+        isTightIdleWindow = startTight
 
         val params = WindowManager.LayoutParams(
             sizePx,
@@ -193,6 +208,9 @@ class OverlayController(
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     phys.updateBounds(computeSafeBounds())
+                    if (isTightIdleWindow) {
+                        setWindowSizeMode(view, phys, tightIdle = false)
+                    }
                     velocityTracker?.recycle()
                     velocityTracker = VelocityTracker.obtain().apply { addMovement(ev) }
                     lastMoveMs = SystemClock.uptimeMillis()
@@ -304,10 +322,25 @@ class OverlayController(
         runCatching { wm.removeView(dv) }
     }
 
-    private fun fixedWindowSizePx(phys: LiquidOrbPhysics): Int {
+    private fun windowSizePx(phys: LiquidOrbPhysics, tightIdle: Boolean): Int {
+        if (tightIdle) {
+            // Exact small orb diameter + minimal 4dp rim so nearby desktop icons are never blocked
+            return ceil(phys.idleRadiusPx * 2f + 8f * phys.density).toInt()
+        }
         val pad = 12f * phys.density
         val activeDia = phys.expandedRadiusPx * 2f + phys.snapOffPx * 0.45f
         return ceil(activeDia + pad * 2f).toInt()
+    }
+
+    private fun setWindowSizeMode(view: LiquidOrbView, phys: LiquidOrbPhysics, tightIdle: Boolean) {
+        val params = layoutParams ?: return
+        if (isTightIdleWindow == tightIdle) return
+        isTightIdleWindow = tightIdle
+        val sizePx = windowSizePx(phys, tightIdle)
+        params.width = sizePx
+        params.height = sizePx
+        applyClampedWindowPosition(view, phys, params)
+        runCatching { wm.updateViewLayout(view, params) }
     }
 
     private fun syncWindowPositionOnly(view: LiquidOrbView, phys: LiquidOrbPhysics) {

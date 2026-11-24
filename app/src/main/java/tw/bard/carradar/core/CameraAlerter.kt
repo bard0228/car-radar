@@ -96,7 +96,12 @@ class CameraAlerter(
                 if (d < prevMin) {
                     minDist[cam.id] = d
                 } else {
-                    val didPassDirectly = prevMin <= passWithinM && d >= prevMin + passMarginM
+                    val bearing = GeoMath.bearingDeg(lat, lon, cam.lat, cam.lon)
+                    val angleToCam = GeoMath.angleDiffDeg(headingDeg, bearing)
+                    val isBehind = angleToCam > 105f
+                    val didPassDirectly = prevMin <= passWithinM && (
+                        d >= prevMin + passMarginM || (isBehind && d >= prevMin + 12.0)
+                    )
                     if (didPassDirectly) {
                         stage[cam.id] = 2
                         if (cam.roadLevel == RoadLevel.EXPRESSWAY) {
@@ -107,9 +112,9 @@ class CameraAlerter(
                         if (emittedEvent == null) {
                             emittedEvent = RadarAlertEvent.Passed(cam, d)
                         }
-                    } else {
-                        val bearing = GeoMath.bearingDeg(lat, lon, cam.lat, cam.lon)
-                        val turnedAway = GeoMath.angleDiffDeg(headingDeg, bearing) > turnAwayDeg
+                    } else if (prevMin > passWithinM) {
+                        // Only treat as "turned away before reaching camera" if we NEVER came within passWithinM!
+                        val turnedAway = angleToCam > turnAwayDeg
                         val movedAway = d >= prevMin + turnAwayMarginM
                         if (turnedAway || movedAway) {
                             stage[cam.id] = 2

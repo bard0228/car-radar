@@ -36,8 +36,12 @@ class RadarCoreTest {
         val (e3, _) = alerter.update(listOf(cam), 25.0043, 121.5000, 90f, 0f)
         assertNull(e3)
 
-        // 4. ~78m north (passed by > passMarginM=30m) -> triggers Passed ["pass"]
-        val (e4, _) = alerter.update(listOf(cam), 25.0052, 121.5000, 80f, 0f)
+        // 4. ~10m north (just passed camera, camera is 180 deg behind, d=10m < minDist) -> updates minDist, MUST NOT be swallowed as turn-away
+        val (e4a, _) = alerter.update(listOf(cam), 25.0046, 121.5000, 80f, 0f)
+        assertNull(e4a)
+
+        // 5. ~25m north (camera is 180 deg behind and distance increased >= 12m past minDist) -> triggers Passed ["pass"]!
+        val (e4, _) = alerter.update(listOf(cam), 25.00475, 121.5000, 80f, 0f)
         assertTrue(e4 is RadarAlertEvent.Passed)
         assertEquals(listOf("pass"), e4?.phraseKeys)
     }
