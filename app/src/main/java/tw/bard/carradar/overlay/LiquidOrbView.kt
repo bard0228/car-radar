@@ -21,10 +21,11 @@ import kotlin.math.hypot
 import kotlin.math.sqrt
 
 /**
- * Single-window hardware-accelerated canvas for the Floating Liquid Water-Ball.
- * Uses View.getLocationOnScreen() on every draw pass (synchronized with ViewRootImpl's
- * actual SurfaceFlinger frame) so window resizes between tight idle (72dp) and expanded/drag
- * (~160dp) have ZERO 1-frame position jumps while preserving 100% native touch responsiveness.
+ * Full-screen FLAG_NOT_TOUCHABLE hardware-accelerated canvas for the Floating Liquid Water-Ball.
+ * Because this window NEVER moves and NEVER resizes (always 0,0 MATCH_PARENT),
+ * SurfaceFlinger has ZERO 1-frame position jumps during idle <-> expanded or edge-snap transitions.
+ * Touch events are handled by the tightly-sized invisible proxy window in OverlayController,
+ * using the exact same fitInsetsTypes=0 screen coordinate system.
  */
 class LiquidOrbView(
     context: Context,
@@ -35,6 +36,8 @@ class LiquidOrbView(
     var activeHud: ActiveCameraHud? = null
     private var lastDisplayHud: ActiveCameraHud? = null
 
+    private var dismissAlpha: Float = 0f
+    private var dismissScale: Float = 1f
     private val screenLoc = IntArray(2)
 
     private val jakartaBold: Typeface = runCatching {
@@ -91,6 +94,21 @@ class LiquidOrbView(
         color = Color.parseColor("#C94A4A")
     }
 
+    // Bottom X Dismiss Target Paints
+    private val dismissBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+    private val dismissStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = dp(1.5f)
+    }
+    private val dismissCrossPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = dp(2.4f)
+        strokeCap = Paint.Cap.ROUND
+        color = Color.WHITE
+    }
+
     fun updateHud(speed: Int, hud: ActiveCameraHud?) {
         speedKmh = speed
         activeHud = hud
@@ -101,22 +119,27 @@ class LiquidOrbView(
         invalidate()
     }
 
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-        super.onSizeChanged(w, h, oldw, oldh)
-        invalidate()
-    }
-
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+
+        getLocationOnScreen(screenLoc)
+        val originX = screenLoc[0].toFloat()
+        val originY = screenLoc[1].toFloat()
+
+        // 0. Draw Bottom 'X' Dismiss Target smoothly when dragging detached water-ball
+        val targetDismissAlpha = if (physics.shouldShowDismissTarget()) 1f else 0f
+        dismissAlpha += (targetDismissAlpha - dismissAlpha) * 0.25f
+        if (dismissAlpha > 0.02f) {
+            val targetScale = if (physics.isHoveringDismiss) 1.18f else 1.0f
+            dismissScale += (targetScale - dismissScale) * 0.25f
+            drawDismissTarget(canvas, originX, originY)
+        } else {
+            dismissAlpha = 0f
+        }
 
         val r = physics.currentRadiusPx()
         val morph = physics.morphProgress.coerceIn(0f, 1f)
 
-        // Ground-truth window origin from ViewRootImpl's current SurfaceFlinger frame:
-        // Never leads or lags wm.updateViewLayout(), eliminating all 1-frame jumps!
-        getLocationOnScreen(screenLoc)
-        val originX = screenLoc[0].toFloat()
-        val originY = screenLoc[1].toFloat()
         val cx = physics.centerX - originX
         val cy = physics.centerY - originY
 
@@ -188,8 +211,8 @@ class LiquidOrbView(
                 cy - ry,
                 gradRight,
                 cy + ry,
-                if (isOverspeed) Color.parseColor("#F0FFF4F4") else Color.parseColor("#ECFFFFFF"),
-                if (isOverspeed) Color.parseColor("#DDFDE2E2") else Color.parseColor("#D6E9EFF8"),
+                if (isOverspeed) Color.parseColor("#FCFFF4F4") else Color.parseColor("#FAFFFFFF"),
+                if (isOverspeed) Color.parseColor("#F0FDE2E2") else Color.parseColor("#EBE9EFF8"),
                 Shader.TileMode.CLAMP
             )
             canvas.drawPath(unifiedPath, fillPaint)
@@ -197,7 +220,7 @@ class LiquidOrbView(
             sheenRect.set(cx - rx * 0.68f, cy - ry * 0.80f, cx + rx * 0.48f, cy - ry * 0.14f)
             sheenPaint.shader = LinearGradient(
                 sheenRect.left, sheenRect.top, sheenRect.left, sheenRect.bottom,
-                Color.parseColor("#9EFFFFFF"),
+                Color.parseColor("#B8FFFFFF"),
                 Color.parseColor("#00FFFFFF"),
                 Shader.TileMode.CLAMP
             )
@@ -207,9 +230,9 @@ class LiquidOrbView(
             canvas.restore()
 
             strokePaint.color = if (isOverspeed) {
-                Color.parseColor("#D9C94A4A")
+                Color.parseColor("#E6C94A4A")
             } else {
-                Color.parseColor("#F7FFFFFF")
+                Color.parseColor("#FFFFFFFF")
             }
             canvas.drawPath(unifiedPath, strokePaint)
         } else {
@@ -226,8 +249,8 @@ class LiquidOrbView(
                 cy - r,
                 cx + r,
                 cy + r,
-                if (isOverspeed) Color.parseColor("#F0FFF4F4") else Color.parseColor("#ECFFFFFF"),
-                if (isOverspeed) Color.parseColor("#DDFDE2E2") else Color.parseColor("#D6E9EFF8"),
+                if (isOverspeed) Color.parseColor("#FCFFF4F4") else Color.parseColor("#FAFFFFFF"),
+                if (isOverspeed) Color.parseColor("#F0FDE2E2") else Color.parseColor("#EBE9EFF8"),
                 Shader.TileMode.CLAMP
             )
             canvas.drawOval(tmpRect, fillPaint)
@@ -235,16 +258,16 @@ class LiquidOrbView(
             sheenRect.set(cx - r * 0.68f, cy - r * 0.80f, cx + r * 0.48f, cy - r * 0.14f)
             sheenPaint.shader = LinearGradient(
                 sheenRect.left, sheenRect.top, sheenRect.left, sheenRect.bottom,
-                Color.parseColor("#9EFFFFFF"),
+                Color.parseColor("#B8FFFFFF"),
                 Color.parseColor("#00FFFFFF"),
                 Shader.TileMode.CLAMP
             )
             canvas.drawOval(sheenRect, sheenPaint)
 
             strokePaint.color = if (isOverspeed) {
-                Color.parseColor("#D9C94A4A")
+                Color.parseColor("#E6C94A4A")
             } else {
-                Color.parseColor("#F7FFFFFF")
+                Color.parseColor("#FFFFFFFF")
             }
             canvas.drawOval(tmpRect, strokePaint)
 
@@ -253,6 +276,28 @@ class LiquidOrbView(
 
         // 3. Typography (Strictly 0° horizontal, Tabular numbers)
         drawTypography(canvas, cx, cy, r, morph, hudForStyle, isOverspeed)
+    }
+
+    private fun drawDismissTarget(canvas: Canvas, originX: Float, originY: Float) {
+        val dcx = physics.dismissCenterX() - originX
+        val dcy = physics.dismissCenterY() - originY + dp(14f) * (1f - dismissAlpha)
+        val r = dp(28f) * dismissScale
+
+        val baseBg = if (physics.isHoveringDismiss) Color.parseColor("#F0C94A4A") else Color.parseColor("#E61E293B")
+        dismissBgPaint.color = baseBg
+        dismissBgPaint.alpha = (Color.alpha(baseBg) * dismissAlpha).toInt()
+
+        dismissStrokePaint.color = Color.WHITE
+        dismissStrokePaint.alpha = (230 * dismissAlpha).toInt()
+
+        dismissCrossPaint.alpha = (255 * dismissAlpha).toInt()
+
+        canvas.drawCircle(dcx, dcy, r, dismissBgPaint)
+        canvas.drawCircle(dcx, dcy, r, dismissStrokePaint)
+
+        val arm = dp(9f) * dismissScale
+        canvas.drawLine(dcx - arm, dcy - arm, dcx + arm, dcy + arm, dismissCrossPaint)
+        canvas.drawLine(dcx + arm, dcy - arm, dcx - arm, dcy + arm, dismissCrossPaint)
     }
 
     private fun drawTypography(
