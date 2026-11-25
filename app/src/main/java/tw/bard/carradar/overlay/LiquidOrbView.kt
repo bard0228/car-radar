@@ -21,9 +21,10 @@ import kotlin.math.hypot
 import kotlin.math.sqrt
 
 /**
- * Full-screen FLAG_NOT_TOUCHABLE hardware-accelerated canvas for the Floating Liquid Water-Ball.
- * Because this window NEVER resizes and NEVER moves (always 0,0 full-screen),
- * SurfaceFlinger has ZERO 1-frame position jumps during idle <-> expanded or edge-snap transitions!
+ * Single-window hardware-accelerated canvas for the Floating Liquid Water-Ball.
+ * Uses View.getLocationOnScreen() on every draw pass (synchronized with ViewRootImpl's
+ * actual SurfaceFlinger frame) so window resizes between tight idle (72dp) and expanded/drag
+ * (~160dp) have ZERO 1-frame position jumps while preserving 100% native touch responsiveness.
  */
 class LiquidOrbView(
     context: Context,
@@ -34,8 +35,7 @@ class LiquidOrbView(
     var activeHud: ActiveCameraHud? = null
     private var lastDisplayHud: ActiveCameraHud? = null
 
-    private var dismissAlpha: Float = 0f
-    private var dismissScale: Float = 1f
+    private val screenLoc = IntArray(2)
 
     private val jakartaBold: Typeface = runCatching {
         ResourcesCompat.getFont(context, R.font.jakarta_bold)
@@ -91,21 +91,6 @@ class LiquidOrbView(
         color = Color.parseColor("#C94A4A")
     }
 
-    // Bottom X Dismiss Target Paints
-    private val dismissBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-    }
-    private val dismissStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = dp(1.5f)
-    }
-    private val dismissCrossPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = dp(2.4f)
-        strokeCap = Paint.Cap.ROUND
-        color = Color.WHITE
-    }
-
     fun updateHud(speed: Int, hud: ActiveCameraHud?) {
         speedKmh = speed
         activeHud = hud
@@ -116,26 +101,24 @@ class LiquidOrbView(
         invalidate()
     }
 
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        invalidate()
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-
-        // 0. Draw Bottom 'X' Dismiss Target smoothly when dragging detached water-ball
-        val targetDismissAlpha = if (physics.shouldShowDismissTarget()) 1f else 0f
-        dismissAlpha += (targetDismissAlpha - dismissAlpha) * 0.25f
-        if (dismissAlpha > 0.02f) {
-            val targetScale = if (physics.isHoveringDismiss) 1.18f else 1.0f
-            dismissScale += (targetScale - dismissScale) * 0.25f
-            drawDismissTarget(canvas)
-        } else {
-            dismissAlpha = 0f
-        }
 
         val r = physics.currentRadiusPx()
         val morph = physics.morphProgress.coerceIn(0f, 1f)
 
-        // Full-screen canvas: screen coordinates == local view coordinates directly!
-        val cx = physics.centerX
-        val cy = physics.centerY
+        // Ground-truth window origin from ViewRootImpl's current SurfaceFlinger frame:
+        // Never leads or lags wm.updateViewLayout(), eliminating all 1-frame jumps!
+        getLocationOnScreen(screenLoc)
+        val originX = screenLoc[0].toFloat()
+        val originY = screenLoc[1].toFloat()
+        val cx = physics.centerX - originX
+        val cy = physics.centerY - originY
 
         val hudForStyle = activeHud ?: if (morph > 0.02f) lastDisplayHud else null
         val isOverspeed = hudForStyle != null &&
@@ -177,7 +160,7 @@ class LiquidOrbView(
 
             val ratio = (physics.peelStretchPx / physics.snapOffPx).coerceIn(0f, 1f)
             val isLeft = physics.snappedSide == OrbSide.LEFT
-            val wallX = if (isLeft) 0f else physics.bounds.screenW
+            val wallX = (if (isLeft) 0f else physics.bounds.screenW) - originX
             val footHalfH = ry * (0.92f - 0.50f * ratio)
             val neckPinchY = ry * (0.52f - 0.38f * ratio)
             val midX = (wallX + cx) * 0.5f
@@ -270,28 +253,6 @@ class LiquidOrbView(
 
         // 3. Typography (Strictly 0° horizontal, Tabular numbers)
         drawTypography(canvas, cx, cy, r, morph, hudForStyle, isOverspeed)
-    }
-
-    private fun drawDismissTarget(canvas: Canvas) {
-        val dcx = physics.dismissCenterX()
-        val dcy = physics.dismissCenterY() + dp(14f) * (1f - dismissAlpha)
-        val r = dp(28f) * dismissScale
-
-        val baseBg = if (physics.isHoveringDismiss) Color.parseColor("#E6C94A4A") else Color.parseColor("#D91E293B")
-        dismissBgPaint.color = baseBg
-        dismissBgPaint.alpha = (Color.alpha(baseBg) * dismissAlpha).toInt()
-
-        dismissStrokePaint.color = Color.WHITE
-        dismissStrokePaint.alpha = (220 * dismissAlpha).toInt()
-
-        dismissCrossPaint.alpha = (255 * dismissAlpha).toInt()
-
-        canvas.drawCircle(dcx, dcy, r, dismissBgPaint)
-        canvas.drawCircle(dcx, dcy, r, dismissStrokePaint)
-
-        val arm = dp(9f) * dismissScale
-        canvas.drawLine(dcx - arm, dcy - arm, dcx + arm, dcy + arm, dismissCrossPaint)
-        canvas.drawLine(dcx + arm, dcy - arm, dcx - arm, dcy + arm, dismissCrossPaint)
     }
 
     private fun drawTypography(
