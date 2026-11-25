@@ -45,6 +45,7 @@ class LiquidOrbView(
 
     private val tmpRect = RectF()
     private val sheenRect = RectF()
+    private val unifiedPath = Path()
     private val bridgePath = Path()
 
     private val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -52,10 +53,6 @@ class LiquidOrbView(
     }
 
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-    }
-
-    private val bridgeFillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
     }
 
@@ -127,7 +124,6 @@ class LiquidOrbView(
             hudForStyle.camera.limitKmh > 0 &&
             speedKmh > hudForStyle.camera.limitKmh
 
-        // Compute subtle volume-preserving jelly squash & stretch along wobble vector
         val wobbleMag = hypot(physics.wobbleX, physics.wobbleY)
         val scaleMajor = 1f + wobbleMag
         val scaleMinor = 1f / sqrt(scaleMajor)
@@ -152,81 +148,114 @@ class LiquidOrbView(
         )
         canvas.drawCircle(cx, cy + dp(2.5f), shadowRadius, shadowPaint)
 
-        // 2. Smooth Edge Peel Liquid Water Bridge (drawn cleanly behind the orb while peeling)
-        if (physics.isPeelingFromEdge && physics.peelStretchPx > 1f) {
-            drawEdgePeelBridge(canvas, cx, cy, r, isOverspeed)
-        }
+        // 2. Unified Liquid Glass Shell (when peeling, union orb + bridge into ONE single seamless body!)
+        val isPeelingBridge = physics.isPeelingFromEdge && physics.peelStretchPx > 1f
+        if (isPeelingBridge) {
+            val rx = r * scaleMajor
+            val ry = r * scaleMinor
+            tmpRect.set(cx - rx, cy - ry, cx + rx, cy + ry)
+            unifiedPath.reset()
+            unifiedPath.addOval(tmpRect, Path.Direction.CW)
 
-        // 3. Smooth Water-Ball Shell (100% pure hardware-antialiased oval)
-        canvas.save()
-        if (wobbleMag > 0.002f) {
-            canvas.rotate(wobbleDeg, cx, cy)
-            canvas.scale(scaleMajor, scaleMinor, cx, cy)
-        }
+            val ratio = (physics.peelStretchPx / physics.snapOffPx).coerceIn(0f, 1f)
+            val isLeft = physics.snappedSide == OrbSide.LEFT
+            val wallX = if (isLeft) -originX else (physics.bounds.screenW - originX)
+            val footHalfH = ry * (0.92f - 0.50f * ratio)
+            val neckPinchY = ry * (0.52f - 0.38f * ratio)
+            val midX = (wallX + cx) * 0.5f
 
-        tmpRect.set(cx - r, cy - r, cx + r, cy + r)
+            bridgePath.reset()
+            if (isLeft) {
+                bridgePath.moveTo(wallX, cy - footHalfH)
+                bridgePath.quadTo(midX, cy - neckPinchY, cx, cy - ry * 0.78f)
+                bridgePath.lineTo(cx, cy + ry * 0.78f)
+                bridgePath.quadTo(midX, cy + neckPinchY, wallX, cy + footHalfH)
+            } else {
+                bridgePath.moveTo(cx, cy - ry * 0.78f)
+                bridgePath.quadTo(midX, cy - neckPinchY, wallX, cy - footHalfH)
+                bridgePath.lineTo(wallX, cy + footHalfH)
+                bridgePath.quadTo(midX, cy + neckPinchY, cx, cy + ry * 0.78f)
+            }
+            bridgePath.close()
 
-        fillPaint.shader = LinearGradient(
-            cx - r,
-            cy - r,
-            cx + r,
-            cy + r,
-            if (isOverspeed) Color.parseColor("#F0FFF4F4") else Color.parseColor("#ECFFFFFF"),
-            if (isOverspeed) Color.parseColor("#DDFDE2E2") else Color.parseColor("#D6E9EFF8"),
-            Shader.TileMode.CLAMP
-        )
-        canvas.drawOval(tmpRect, fillPaint)
+            unifiedPath.op(bridgePath, Path.Op.UNION)
 
-        // Upper-left Liquid Glass Specular Sheen
-        sheenRect.set(cx - r * 0.68f, cy - r * 0.80f, cx + r * 0.48f, cy - r * 0.14f)
-        sheenPaint.shader = LinearGradient(
-            sheenRect.left, sheenRect.top, sheenRect.left, sheenRect.bottom,
-            Color.parseColor("#9EFFFFFF"),
-            Color.parseColor("#00FFFFFF"),
-            Shader.TileMode.CLAMP
-        )
-        canvas.drawOval(sheenRect, sheenPaint)
+            // Single unified gradient fill -> ZERO color seam between bridge and orb!
+            val gradLeft = minOf(wallX, cx - rx)
+            val gradRight = maxOf(wallX, cx + rx)
+            fillPaint.shader = LinearGradient(
+                gradLeft,
+                cy - ry,
+                gradRight,
+                cy + ry,
+                if (isOverspeed) Color.parseColor("#F0FFF4F4") else Color.parseColor("#ECFFFFFF"),
+                if (isOverspeed) Color.parseColor("#DDFDE2E2") else Color.parseColor("#D6E9EFF8"),
+                Shader.TileMode.CLAMP
+            )
+            canvas.drawPath(unifiedPath, fillPaint)
 
-        // Crisp Glass Border Rim
-        strokePaint.color = if (isOverspeed) {
-            Color.parseColor("#D9C94A4A")
+            // Specular sheen clipped cleanly inside unified body
+            sheenRect.set(cx - rx * 0.68f, cy - ry * 0.80f, cx + rx * 0.48f, cy - ry * 0.14f)
+            sheenPaint.shader = LinearGradient(
+                sheenRect.left, sheenRect.top, sheenRect.left, sheenRect.bottom,
+                Color.parseColor("#9EFFFFFF"),
+                Color.parseColor("#00FFFFFF"),
+                Shader.TileMode.CLAMP
+            )
+            canvas.save()
+            canvas.clipPath(unifiedPath)
+            canvas.drawOval(sheenRect, sheenPaint)
+            canvas.restore()
+
+            // Continuous outer border around the single unified shape
+            strokePaint.color = if (isOverspeed) {
+                Color.parseColor("#D9C94A4A")
+            } else {
+                Color.parseColor("#F7FFFFFF")
+            }
+            canvas.drawPath(unifiedPath, strokePaint)
         } else {
-            Color.parseColor("#F7FFFFFF")
+            // Pure hardware-antialiased smooth oval water-ball
+            canvas.save()
+            if (wobbleMag > 0.002f) {
+                canvas.rotate(wobbleDeg, cx, cy)
+                canvas.scale(scaleMajor, scaleMinor, cx, cy)
+            }
+
+            tmpRect.set(cx - r, cy - r, cx + r, cy + r)
+
+            fillPaint.shader = LinearGradient(
+                cx - r,
+                cy - r,
+                cx + r,
+                cy + r,
+                if (isOverspeed) Color.parseColor("#F0FFF4F4") else Color.parseColor("#ECFFFFFF"),
+                if (isOverspeed) Color.parseColor("#DDFDE2E2") else Color.parseColor("#D6E9EFF8"),
+                Shader.TileMode.CLAMP
+            )
+            canvas.drawOval(tmpRect, fillPaint)
+
+            sheenRect.set(cx - r * 0.68f, cy - r * 0.80f, cx + r * 0.48f, cy - r * 0.14f)
+            sheenPaint.shader = LinearGradient(
+                sheenRect.left, sheenRect.top, sheenRect.left, sheenRect.bottom,
+                Color.parseColor("#9EFFFFFF"),
+                Color.parseColor("#00FFFFFF"),
+                Shader.TileMode.CLAMP
+            )
+            canvas.drawOval(sheenRect, sheenPaint)
+
+            strokePaint.color = if (isOverspeed) {
+                Color.parseColor("#D9C94A4A")
+            } else {
+                Color.parseColor("#F7FFFFFF")
+            }
+            canvas.drawOval(tmpRect, strokePaint)
+
+            canvas.restore()
         }
-        canvas.drawOval(tmpRect, strokePaint)
 
-        canvas.restore()
-
-        // 4. Typography (Strictly 0° horizontal, Tabular numbers, anchored at center)
+        // 3. Typography (Strictly 0° horizontal, Tabular numbers, anchored at center)
         drawTypography(canvas, cx, cy, r, morph, hudForStyle, isOverspeed)
-    }
-
-    /**
-     * Smooth concave quadratic Bézier water bridge connecting the orb to the screen edge
-     * while pulling inward up to the 48dp snap-off threshold.
-     */
-    private fun drawEdgePeelBridge(canvas: Canvas, cx: Float, cy: Float, r: Float, isOverspeed: Boolean) {
-        val ratio = (physics.peelStretchPx / physics.snapOffPx).coerceIn(0f, 1f)
-        val isLeft = physics.snappedSide == OrbSide.LEFT
-        val wallX = if (isLeft) -windowOriginX else (physics.bounds.screenW - windowOriginX)
-
-        val footHalfH = r * (0.86f - 0.48f * ratio)
-        val neckPinchY = r * (0.48f - 0.36f * ratio)
-        val midX = (wallX + cx) * 0.5f
-
-        bridgePath.reset()
-        bridgePath.moveTo(wallX, cy - footHalfH)
-        bridgePath.quadTo(midX, cy - neckPinchY, cx, cy - r * 0.72f)
-        bridgePath.lineTo(cx, cy + r * 0.72f)
-        bridgePath.quadTo(midX, cy + neckPinchY, wallX, cy + footHalfH)
-        bridgePath.close()
-
-        bridgeFillPaint.color = if (isOverspeed) {
-            Color.parseColor("#D8FDE2E2")
-        } else {
-            Color.parseColor("#DCEAF0F9")
-        }
-        canvas.drawPath(bridgePath, bridgeFillPaint)
     }
 
     private fun drawTypography(

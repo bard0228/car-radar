@@ -208,14 +208,10 @@ class OverlayController(
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     phys.updateBounds(computeSafeBounds())
-                    if (isTightIdleWindow) {
-                        setWindowSizeMode(view, phys, tightIdle = false)
-                    }
                     velocityTracker?.recycle()
                     velocityTracker = VelocityTracker.obtain().apply { addMovement(ev) }
                     lastMoveMs = SystemClock.uptimeMillis()
                     phys.onTouchDown(ev.rawX, ev.rawY)
-                    startAnimationLoop()
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -224,6 +220,11 @@ class OverlayController(
                     val dt = ((now - lastMoveMs) / 1000f).coerceIn(0.004f, 0.05f)
                     lastMoveMs = now
                     phys.onTouchMove(ev.rawX, ev.rawY, dt)
+
+                    // Only expand window when user actually starts dragging/peeling (never on a simple tap!)
+                    if (isTightIdleWindow && (phys.peelStretchPx > 0.5f || !phys.isPeelingFromEdge)) {
+                        setWindowSizeMode(view, phys, tightIdle = false)
+                    }
 
                     if (phys.consumeSnapOffHaptic()) {
                         view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -261,7 +262,6 @@ class OverlayController(
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                         }
                         context.startActivity(i)
-                        startAnimationLoop()
                     } else {
                         startAnimationLoop()
                     }
