@@ -192,8 +192,10 @@ class OverlayController(
             y = 0
         }
 
-        // 2. Invisible tight touch proxy window (only covers the actual orb area)
-        val proxyView = View(context)
+        // 2. Invisible tight touch proxy window (0x01000000 non-zero alpha pixel required by Android 12+ touch pass)
+        val proxyView = View(context).apply {
+            setBackgroundColor(0x01000000)
+        }
         val tParams = WindowManager.LayoutParams(
             1,
             1,
