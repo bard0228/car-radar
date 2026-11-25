@@ -21,23 +21,21 @@ import kotlin.math.hypot
 import kotlin.math.sqrt
 
 /**
- * Ultra-smooth Liquid Glass Water-Ball View:
- * - Pure hardware-antialiased oval water-ball with subtle jelly wobble.
- * - Smooth concave liquid surface-tension water bridge when peeling from screen edge (0..48dp).
- * - Typography: Bottom speed limit (32sp) > Top current speed (21sp),
- *   Middle remaining distance (14.5sp bold, dark slate #334155) with crisp divider lines.
+ * Full-screen FLAG_NOT_TOUCHABLE hardware-accelerated canvas for the Floating Liquid Water-Ball.
+ * Because this window NEVER resizes and NEVER moves (always 0,0 full-screen),
+ * SurfaceFlinger has ZERO 1-frame position jumps during idle <-> expanded or edge-snap transitions!
  */
 class LiquidOrbView(
     context: Context,
     val physics: LiquidOrbPhysics
 ) : View(context) {
 
-    var windowOriginX: Float = 0f
-    var windowOriginY: Float = 0f
-
     var speedKmh: Int = 0
     var activeHud: ActiveCameraHud? = null
     private var lastDisplayHud: ActiveCameraHud? = null
+
+    private var dismissAlpha: Float = 0f
+    private var dismissScale: Float = 1f
 
     private val jakartaBold: Typeface = runCatching {
         ResourcesCompat.getFont(context, R.font.jakarta_bold)
@@ -93,6 +91,21 @@ class LiquidOrbView(
         color = Color.parseColor("#C94A4A")
     }
 
+    // Bottom X Dismiss Target Paints
+    private val dismissBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+    }
+    private val dismissStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = dp(1.5f)
+    }
+    private val dismissCrossPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = dp(2.4f)
+        strokeCap = Paint.Cap.ROUND
+        color = Color.WHITE
+    }
+
     fun updateHud(speed: Int, hud: ActiveCameraHud?) {
         speedKmh = speed
         activeHud = hud
@@ -103,21 +116,26 @@ class LiquidOrbView(
         invalidate()
     }
 
-    private val screenLoc = IntArray(2)
-
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+
+        // 0. Draw Bottom 'X' Dismiss Target smoothly when dragging detached water-ball
+        val targetDismissAlpha = if (physics.shouldShowDismissTarget()) 1f else 0f
+        dismissAlpha += (targetDismissAlpha - dismissAlpha) * 0.25f
+        if (dismissAlpha > 0.02f) {
+            val targetScale = if (physics.isHoveringDismiss) 1.18f else 1.0f
+            dismissScale += (targetScale - dismissScale) * 0.25f
+            drawDismissTarget(canvas)
+        } else {
+            dismissAlpha = 0f
+        }
 
         val r = physics.currentRadiusPx()
         val morph = physics.morphProgress.coerceIn(0f, 1f)
 
-        // Read actual SurfaceFlinger window origin to guarantee 0-frame desync during idle <-> expanded resize
-        getLocationOnScreen(screenLoc)
-        val originX = if (screenLoc[0] != 0 || windowOriginX == 0f) screenLoc[0].toFloat() else windowOriginX
-        val originY = if (screenLoc[1] != 0 || windowOriginY == 0f) screenLoc[1].toFloat() else windowOriginY
-
-        val cx = physics.centerX - originX
-        val cy = physics.centerY - originY
+        // Full-screen canvas: screen coordinates == local view coordinates directly!
+        val cx = physics.centerX
+        val cy = physics.centerY
 
         val hudForStyle = activeHud ?: if (morph > 0.02f) lastDisplayHud else null
         val isOverspeed = hudForStyle != null &&
@@ -148,7 +166,7 @@ class LiquidOrbView(
         )
         canvas.drawCircle(cx, cy + dp(2.5f), shadowRadius, shadowPaint)
 
-        // 2. Unified Liquid Glass Shell (when peeling, union orb + bridge into ONE single seamless body!)
+        // 2. Unified Liquid Glass Shell (when peeling, union orb + bridge into ONE seamless body!)
         val isPeelingBridge = physics.isPeelingFromEdge && physics.peelStretchPx > 1f
         if (isPeelingBridge) {
             val rx = r * scaleMajor
@@ -159,7 +177,7 @@ class LiquidOrbView(
 
             val ratio = (physics.peelStretchPx / physics.snapOffPx).coerceIn(0f, 1f)
             val isLeft = physics.snappedSide == OrbSide.LEFT
-            val wallX = if (isLeft) -originX else (physics.bounds.screenW - originX)
+            val wallX = if (isLeft) 0f else physics.bounds.screenW
             val footHalfH = ry * (0.92f - 0.50f * ratio)
             val neckPinchY = ry * (0.52f - 0.38f * ratio)
             val midX = (wallX + cx) * 0.5f
@@ -180,7 +198,6 @@ class LiquidOrbView(
 
             unifiedPath.op(bridgePath, Path.Op.UNION)
 
-            // Single unified gradient fill -> ZERO color seam between bridge and orb!
             val gradLeft = minOf(wallX, cx - rx)
             val gradRight = maxOf(wallX, cx + rx)
             fillPaint.shader = LinearGradient(
@@ -194,7 +211,6 @@ class LiquidOrbView(
             )
             canvas.drawPath(unifiedPath, fillPaint)
 
-            // Specular sheen clipped cleanly inside unified body
             sheenRect.set(cx - rx * 0.68f, cy - ry * 0.80f, cx + rx * 0.48f, cy - ry * 0.14f)
             sheenPaint.shader = LinearGradient(
                 sheenRect.left, sheenRect.top, sheenRect.left, sheenRect.bottom,
@@ -207,7 +223,6 @@ class LiquidOrbView(
             canvas.drawOval(sheenRect, sheenPaint)
             canvas.restore()
 
-            // Continuous outer border around the single unified shape
             strokePaint.color = if (isOverspeed) {
                 Color.parseColor("#D9C94A4A")
             } else {
@@ -215,7 +230,6 @@ class LiquidOrbView(
             }
             canvas.drawPath(unifiedPath, strokePaint)
         } else {
-            // Pure hardware-antialiased smooth oval water-ball
             canvas.save()
             if (wobbleMag > 0.002f) {
                 canvas.rotate(wobbleDeg, cx, cy)
@@ -254,8 +268,30 @@ class LiquidOrbView(
             canvas.restore()
         }
 
-        // 3. Typography (Strictly 0° horizontal, Tabular numbers, anchored at center)
+        // 3. Typography (Strictly 0° horizontal, Tabular numbers)
         drawTypography(canvas, cx, cy, r, morph, hudForStyle, isOverspeed)
+    }
+
+    private fun drawDismissTarget(canvas: Canvas) {
+        val dcx = physics.dismissCenterX()
+        val dcy = physics.dismissCenterY() + dp(14f) * (1f - dismissAlpha)
+        val r = dp(28f) * dismissScale
+
+        val baseBg = if (physics.isHoveringDismiss) Color.parseColor("#E6C94A4A") else Color.parseColor("#D91E293B")
+        dismissBgPaint.color = baseBg
+        dismissBgPaint.alpha = (Color.alpha(baseBg) * dismissAlpha).toInt()
+
+        dismissStrokePaint.color = Color.WHITE
+        dismissStrokePaint.alpha = (220 * dismissAlpha).toInt()
+
+        dismissCrossPaint.alpha = (255 * dismissAlpha).toInt()
+
+        canvas.drawCircle(dcx, dcy, r, dismissBgPaint)
+        canvas.drawCircle(dcx, dcy, r, dismissStrokePaint)
+
+        val arm = dp(9f) * dismissScale
+        canvas.drawLine(dcx - arm, dcy - arm, dcx + arm, dcy + arm, dismissCrossPaint)
+        canvas.drawLine(dcx + arm, dcy - arm, dcx - arm, dcy + arm, dismissCrossPaint)
     }
 
     private fun drawTypography(
@@ -267,13 +303,11 @@ class LiquidOrbView(
         hud: ActiveCameraHud?,
         isOverspeed: Boolean
     ) {
-        // Top: Current Speed (26sp centered in Idle -> 21sp on top in Alert Expanded so Limit is larger)
         speedPaint.textSize = sp(26f - 5f * morph)
         speedPaint.color = if (isOverspeed) Color.parseColor("#C94A4A") else Color.parseColor("#1E293B")
         val speedCenterY = cy - r * 0.48f * morph
         drawCenteredText(canvas, speedKmh.toString(), cx, speedCenterY, speedPaint)
 
-        // Middle Distance & Bottom Speed Limit
         if (morph > 0.12f && hud != null) {
             val alphaFloat = ((morph - 0.12f) / 0.88f).coerceIn(0f, 1f)
             val alphaInt = (alphaFloat * 255).toInt()

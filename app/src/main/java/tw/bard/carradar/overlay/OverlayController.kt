@@ -3,14 +3,10 @@ package tw.bard.carradar.overlay
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
@@ -26,12 +22,12 @@ import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 /**
- * High-FPS WindowManager host for the Floating Liquid Water-Ball:
- * - Strictly clamps window x/y within [0, screenW - w] (NO FLAG_LAYOUT_NO_LIMITS) so the orb
- *   NEVER sneaks into screen edges during small <-> large transitions.
- * - Uses FLAG_KEEP_SCREEN_ON while visible so screen never times out while driving.
- * - Hosts a Liquid Glass bottom 'X' dismiss target while dragging; dropping inside hides
- *   the orb until the user re-enters the app foreground.
+ * Dual-Window Zero-Jitter Overlay Architecture:
+ * 1. Visual Window (`orbView`): Full-screen MATCH_PARENT + FLAG_NOT_TOUCHABLE + FLAG_KEEP_SCREEN_ON.
+ *    Never moves, never resizes -> 100% eliminates all SurfaceFlinger 1-frame position jumps!
+ * 2. Touch Proxy Window (`touchProxyView`): Invisible transparent hitbox sized tightly to the
+ *    current orb diameter (small orb = small hitbox, large orb = large hitbox), so nearby desktop
+ *    app icons are never accidentally blocked.
  */
 class OverlayController(
     private val context: Context,
@@ -39,13 +35,10 @@ class OverlayController(
 ) {
     private val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private var orbView: LiquidOrbView? = null
+    private var touchProxyView: View? = null
+    private var touchParams: WindowManager.LayoutParams? = null
     private var physics: LiquidOrbPhysics? = null
-    private var layoutParams: WindowManager.LayoutParams? = null
     private var velocityTracker: VelocityTracker? = null
-
-    // Bottom X dismiss target window
-    private var dismissView: DismissTargetView? = null
-    private var dismissParams: WindowManager.LayoutParams? = null
 
     private var lastFrameMs: Long = 0L
     private var lastMoveMs: Long = 0L
@@ -53,7 +46,6 @@ class OverlayController(
     private var lastHud: ActiveCameraHud? = null
     private var lastSpeed: Int = 0
     private var pendingHideAfterRetract: Boolean = false
-    private var isTightIdleWindow: Boolean = false
 
     @Volatile
     var isTemporarilyDismissed: Boolean = false
@@ -75,7 +67,6 @@ class OverlayController(
             lastFrameMs = now
 
             val stillAnimating = phys.step(dtSec)
-            syncWindowPositionOnly(view, phys)
             view.invalidate()
 
             if (stillAnimating) {
@@ -85,14 +76,11 @@ class OverlayController(
                 lastFrameMs = 0L
                 prefs.overlaySide = phys.snappedSide.name
                 prefs.overlayY = phys.centerY.toInt()
-                if (!phys.isAlertActive && phys.morphProgress <= 0.01f) {
-                    if (pendingHideAfterRetract) {
-                        pendingHideAfterRetract = false
-                        hide()
-                        return
-                    }
-                    // Shrink touchable window to match small Idle Orb so nearby home screen icons remain clickable
-                    setWindowSizeMode(view, phys, tightIdle = true)
+                // Sync invisible touch proxy to exact settled orb size & position
+                syncTouchProxy(phys)
+                if (!phys.isAlertActive && phys.morphProgress <= 0.01f && pendingHideAfterRetract) {
+                    pendingHideAfterRetract = false
+                    hide()
                 }
             }
         }
@@ -121,10 +109,8 @@ class OverlayController(
             if (hud != null) {
                 pendingHideAfterRetract = false
                 ensureAttached()
-                val v = orbView ?: return
-                val p = physics ?: return
-                setWindowSizeMode(v, p, tightIdle = false)
-                v.updateHud(speedKmh, hud)
+                orbView?.updateHud(speedKmh, hud)
+                physics?.let { syncTouchProxy(it) }
                 startAnimationLoop()
             } else if (orbView != null) {
                 pendingHideAfterRetract = true
@@ -137,25 +123,25 @@ class OverlayController(
         // OverlayDisplayMode.ALWAYS
         pendingHideAfterRetract = false
         ensureAttached()
-        val v = orbView ?: return
-        val p = physics ?: return
-        if (hud != null) {
-            setWindowSizeMode(v, p, tightIdle = false)
-        }
-        v.updateHud(speedKmh, hud)
+        orbView?.updateHud(speedKmh, hud)
+        physics?.let { syncTouchProxy(it) }
         startAnimationLoop()
     }
 
     fun hide() {
         isLoopRunning = false
         pendingHideAfterRetract = false
-        hideDismissTarget()
-        val v = orbView ?: return
-        v.removeCallbacks(frameRunnable)
-        runCatching { wm.removeView(v) }
+        orbView?.let { v ->
+            v.removeCallbacks(frameRunnable)
+            runCatching { wm.removeView(v) }
+        }
+        touchProxyView?.let { tv ->
+            runCatching { wm.removeView(tv) }
+        }
         orbView = null
+        touchProxyView = null
+        touchParams = null
         physics = null
-        layoutParams = null
         velocityTracker?.recycle()
         velocityTracker = null
     }
@@ -184,27 +170,42 @@ class OverlayController(
             initialSide = savedSide,
             initialCenterY = savedY
         )
-        val view = LiquidOrbView(context, phys)
-        view.speedKmh = lastSpeed
-        view.activeHud = lastHud
 
-        val startTight = (lastHud == null)
-        val sizePx = windowSizePx(phys, startTight)
-        isTightIdleWindow = startTight
+        // 1. Full-screen visual canvas (NOT touchable -> 100% pass-through, NEVER resizes, ZERO jitter!)
+        val visualView = LiquidOrbView(context, phys)
+        visualView.speedKmh = lastSpeed
+        visualView.activeHud = lastHud
 
-        val params = WindowManager.LayoutParams(
-            sizePx,
-            sizePx,
+        val visualParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
                 WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 0
+            y = 0
+        }
+
+        // 2. Invisible tight touch proxy window (only covers the actual orb area)
+        val proxyView = View(context)
+        val tParams = WindowManager.LayoutParams(
+            1,
+            1,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
         }
 
-        view.setOnTouchListener { _, ev ->
+        proxyView.setOnTouchListener { _, ev ->
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     phys.updateBounds(computeSafeBounds())
@@ -221,26 +222,14 @@ class OverlayController(
                     lastMoveMs = now
                     phys.onTouchMove(ev.rawX, ev.rawY, dt)
 
-                    // Only expand window when user actually starts dragging/peeling (never on a simple tap!)
-                    if (isTightIdleWindow && (phys.peelStretchPx > 0.5f || !phys.isPeelingFromEdge)) {
-                        setWindowSizeMode(view, phys, tightIdle = false)
-                    }
-
                     if (phys.consumeSnapOffHaptic()) {
-                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        proxyView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                     }
                     if (phys.consumeDismissHoverHaptic()) {
-                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        proxyView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                     }
 
-                    if (phys.shouldShowDismissTarget()) {
-                        showOrUpdateDismissTarget(phys)
-                    } else {
-                        hideDismissTarget()
-                    }
-
-                    syncWindowPositionOnly(view, phys)
-                    view.invalidate()
+                    visualView.invalidate()
                     startAnimationLoop()
                     true
                 }
@@ -252,7 +241,6 @@ class OverlayController(
                     velocityTracker?.recycle()
                     velocityTracker = null
 
-                    hideDismissTarget()
                     val result = phys.onTouchUp(vx, vy)
                     if (result.dismissed) {
                         isTemporarilyDismissed = true
@@ -272,108 +260,41 @@ class OverlayController(
         }
 
         physics = phys
-        orbView = view
-        layoutParams = params
+        orbView = visualView
+        touchProxyView = proxyView
+        touchParams = tParams
 
-        applyClampedWindowPosition(view, phys, params)
+        applyTouchProxyBounds(phys, tParams)
         runCatching {
-            wm.addView(view, params)
+            wm.addView(visualView, visualParams)
+            wm.addView(proxyView, tParams)
         }.onFailure {
-            orbView = null
-            physics = null
-            layoutParams = null
+            hide()
         }
     }
 
-    private fun showOrUpdateDismissTarget(phys: LiquidOrbPhysics) {
-        val d = phys.density
-        val sizePx = ceil(84f * d).toInt()
-        if (dismissView == null) {
-            val dv = DismissTargetView(context)
-            val dp = WindowManager.LayoutParams(
-                sizePx,
-                sizePx,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-            ).apply {
-                gravity = Gravity.TOP or Gravity.START
-                x = (phys.dismissCenterX() - sizePx * 0.5f).roundToInt()
-                y = (phys.dismissCenterY() - sizePx * 0.5f).roundToInt()
-            }
-            runCatching {
-                wm.addView(dv, dp)
-                dismissView = dv
-                dismissParams = dp
-                dv.alpha = 0f
-                dv.translationY = 20f * d
-                dv.animate().alpha(1f).translationY(0f).setDuration(180L).start()
-            }
-        }
-        dismissView?.setActiveHover(phys.isHoveringDismiss)
-    }
-
-    private fun hideDismissTarget() {
-        val dv = dismissView ?: return
-        dismissView = null
-        dismissParams = null
-        runCatching { wm.removeView(dv) }
-    }
-
-    private fun windowSizePx(phys: LiquidOrbPhysics, tightIdle: Boolean): Int {
-        if (tightIdle) {
-            // Exact small orb diameter + minimal 4dp rim so nearby desktop icons are never blocked
-            return ceil(phys.idleRadiusPx * 2f + 8f * phys.density).toInt()
-        }
-        val pad = 12f * phys.density
-        val activeDia = phys.expandedRadiusPx * 2f + phys.snapOffPx * 0.45f
-        return ceil(activeDia + pad * 2f).toInt()
-    }
-
-    private fun setWindowSizeMode(view: LiquidOrbView, phys: LiquidOrbPhysics, tightIdle: Boolean) {
-        val params = layoutParams ?: return
-        if (isTightIdleWindow == tightIdle) return
-        isTightIdleWindow = tightIdle
-        val sizePx = windowSizePx(phys, tightIdle)
-        params.width = sizePx
-        params.height = sizePx
-        applyClampedWindowPosition(view, phys, params)
-        runCatching { wm.updateViewLayout(view, params) }
-    }
-
-    private fun syncWindowPositionOnly(view: LiquidOrbView, phys: LiquidOrbPhysics) {
-        val params = layoutParams ?: return
-        val oldX = params.x
-        val oldY = params.y
-        applyClampedWindowPosition(view, phys, params)
-        if (params.x != oldX || params.y != oldY) {
-            runCatching { wm.updateViewLayout(view, params) }
+    private fun syncTouchProxy(phys: LiquidOrbPhysics) {
+        val pv = touchProxyView ?: return
+        val tp = touchParams ?: return
+        val oldX = tp.x
+        val oldY = tp.y
+        val oldW = tp.width
+        val oldH = tp.height
+        applyTouchProxyBounds(phys, tp)
+        if (tp.x != oldX || tp.y != oldY || tp.width != oldW || tp.height != oldH) {
+            runCatching { wm.updateViewLayout(pv, tp) }
         }
     }
 
-    /**
-     * Strictly clamps window origin within [0, screenW - width] and [0, screenH - height].
-     * Guarantees windowOriginX/Y matches Android WindowManager 100% with zero edge drift!
-     */
-    private fun applyClampedWindowPosition(
-        view: LiquidOrbView,
-        phys: LiquidOrbPhysics,
-        params: WindowManager.LayoutParams
-    ) {
-        val halfW = params.width * 0.5f
-        val halfH = params.height * 0.5f
-        val maxWinX = (phys.bounds.screenW - params.width).coerceAtLeast(0f)
-        val maxWinY = (phys.bounds.screenH - params.height).coerceAtLeast(0f)
-
-        val winX = (phys.centerX - halfW).coerceIn(0f, maxWinX).roundToInt()
-        val winY = (phys.centerY - halfH).coerceIn(0f, maxWinY).roundToInt()
-
-        params.x = winX
-        params.y = winY
-        view.windowOriginX = winX.toFloat()
-        view.windowOriginY = winY.toFloat()
+    private fun applyTouchProxyBounds(phys: LiquidOrbPhysics, tp: WindowManager.LayoutParams) {
+        val r = phys.currentRadiusPx()
+        val sizePx = ceil(r * 2f + 4f * phys.density).toInt()
+        val maxX = (phys.bounds.screenW - sizePx).coerceAtLeast(0f)
+        val maxY = (phys.bounds.screenH - sizePx).coerceAtLeast(0f)
+        tp.width = sizePx
+        tp.height = sizePx
+        tp.x = (phys.centerX - sizePx * 0.5f).coerceIn(0f, maxX).roundToInt()
+        tp.y = (phys.centerY - sizePx * 0.5f).coerceIn(0f, maxY).roundToInt()
     }
 
     private fun computeSafeBounds(): ScreenSafeBounds {
@@ -406,53 +327,4 @@ class OverlayController(
         val id = context.resources.getIdentifier(name, "dimen", "android")
         return if (id > 0) context.resources.getDimensionPixelSize(id) else fallback
     }
-}
-
-/**
- * Liquid Glass bottom 'X' dismiss target rendered while dragging the floating water-ball.
- */
-private class DismissTargetView(context: Context) : View(context) {
-    private var hovered = false
-
-    private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.FILL
-    }
-    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = dp(1.5f)
-    }
-    private val crossPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = dp(2.4f)
-        strokeCap = Paint.Cap.ROUND
-    }
-
-    fun setActiveHover(isHovered: Boolean) {
-        if (hovered == isHovered) return
-        hovered = isHovered
-        val targetScale = if (isHovered) 1.18f else 1.0f
-        animate().scaleX(targetScale).scaleY(targetScale).setDuration(140L).start()
-        invalidate()
-    }
-
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        val cx = width * 0.5f
-        val cy = height * 0.5f
-        val r = dp(28f)
-
-        bgPaint.color = if (hovered) Color.parseColor("#E6C94A4A") else Color.parseColor("#D91E293B")
-        strokePaint.color = if (hovered) Color.parseColor("#FFFFFFFF") else Color.parseColor("#CCFFFFFF")
-        crossPaint.color = Color.WHITE
-
-        canvas.drawCircle(cx, cy, r, bgPaint)
-        canvas.drawCircle(cx, cy, r, strokePaint)
-
-        val arm = dp(9f)
-        canvas.drawLine(cx - arm, cy - arm, cx + arm, cy + arm, crossPaint)
-        canvas.drawLine(cx + arm, cy - arm, cx - arm, cy + arm, crossPaint)
-    }
-
-    private fun dp(v: Float): Float =
-        TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, resources.displayMetrics)
 }
