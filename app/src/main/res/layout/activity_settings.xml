@@ -27,7 +27,8 @@
                 android:contentDescription="返回"
                 android:padding="12dp"
                 android:scaleType="centerInside"
-                android:src="@drawable/ic_arrow_back" />
+                android:src="@drawable/ic_arrow_back"
+                android:tag="lg_pill" />
 
             <TextView
                 android:layout_width="0dp"
@@ -46,7 +47,8 @@
             android:layout_height="wrap_content"
             android:background="@drawable/bg_glass_card"
             android:orientation="vertical"
-            android:padding="18dp">
+            android:padding="18dp"
+            android:tag="lg_card">
 
             <com.google.android.material.materialswitch.MaterialSwitch
                 android:id="@+id/switchBtAuto"
@@ -82,7 +84,8 @@
             android:layout_marginTop="14dp"
             android:background="@drawable/bg_glass_card"
             android:orientation="vertical"
-            android:padding="18dp">
+            android:padding="18dp"
+            android:tag="lg_card">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -172,7 +175,8 @@
             android:layout_marginTop="14dp"
             android:background="@drawable/bg_glass_card"
             android:orientation="vertical"
-            android:padding="18dp">
+            android:padding="18dp"
+            android:tag="lg_card">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -236,7 +240,8 @@
             android:layout_marginTop="14dp"
             android:background="@drawable/bg_glass_card"
             android:orientation="vertical"
-            android:padding="18dp">
+            android:padding="18dp"
+            android:tag="lg_card">
 
             <com.google.android.material.materialswitch.MaterialSwitch
                 android:id="@+id/switchOverlay"
@@ -282,7 +287,8 @@
             android:layout_marginTop="14dp"
             android:background="@drawable/bg_glass_card"
             android:orientation="vertical"
-            android:padding="18dp">
+            android:padding="18dp"
+            android:tag="lg_card">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -313,7 +319,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
                 android:layout_marginTop="10dp"
-                android:backgroundTint="@color/accent_orange"
+                android:backgroundTint="@color/accent_sage"
                 android:text="線上更新政府測速點資料"
                 android:textColor="#FFFFFF" />
 

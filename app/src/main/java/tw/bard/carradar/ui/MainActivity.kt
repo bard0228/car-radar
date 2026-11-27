@@ -89,7 +89,7 @@ class MainActivity : BaseLiquidActivity() {
                     binding.tvStatusPill.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_secondary))
                     binding.btnToggleMonitor.text = getString(R.string.btn_start)
                     binding.btnToggleMonitor.backgroundTintList =
-                        ColorStateList.valueOf(ContextCompat.getColor(this@MainActivity, R.color.accent_orange))
+                        ColorStateList.valueOf(ContextCompat.getColor(this@MainActivity, R.color.accent_sage))
                 }
 
                 val hud = st.activeHud

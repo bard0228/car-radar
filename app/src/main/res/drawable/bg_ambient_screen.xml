@@ -1,32 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Base soft low-saturation sage-mist canvas -->
     <item>
         <shape android:shape="rectangle">
             <gradient
                 android:angle="135"
-                android:startColor="#E8EEF6"
-                android:centerColor="#EEF2F7"
-                android:endColor="#EAE6DF" />
+                android:startColor="#F5FAF7"
+                android:centerColor="#ECF3EF"
+                android:endColor="#E1EBE5" />
         </shape>
     </item>
-    <item android:top="-120dp" android:right="-80dp">
+    <!-- Top-left soft sage mist aura -->
+    <item android:top="-110dp" android:left="-90dp">
         <shape android:shape="oval">
             <size android:width="360dp" android:height="360dp" />
             <gradient
                 android:type="radial"
                 android:gradientRadius="180dp"
-                android:startColor="#33D97736"
-                android:endColor="#00D97736" />
+                android:startColor="#4D9DC4B1"
+                android:endColor="#009DC4B1" />
         </shape>
     </item>
-    <item android:bottom="-100dp" android:left="-80dp">
+    <!-- Top-right pale eucalyptus glow -->
+    <item android:top="-60dp" android:right="-100dp">
         <shape android:shape="oval">
             <size android:width="340dp" android:height="340dp" />
             <gradient
                 android:type="radial"
                 android:gradientRadius="170dp"
-                android:startColor="#2E4B73B5"
-                android:endColor="#004B73B5" />
+                android:startColor="#44B7D6C6"
+                android:endColor="#00B7D6C6" />
+        </shape>
+    </item>
+    <!-- Bottom-left cool mineral mist -->
+    <item android:bottom="-110dp" android:left="-70dp">
+        <shape android:shape="oval">
+            <size android:width="360dp" android:height="360dp" />
+            <gradient
+                android:type="radial"
+                android:gradientRadius="180dp"
+                android:startColor="#3BA5C2C8"
+                android:endColor="#00A5C2C8" />
+        </shape>
+    </item>
+    <!-- Bottom-right soft moss highlight -->
+    <item android:bottom="-90dp" android:right="-80dp">
+        <shape android:shape="oval">
+            <size android:width="320dp" android:height="320dp" />
+            <gradient
+                android:type="radial"
+                android:gradientRadius="160dp"
+                android:startColor="#38A9C7B7"
+                android:endColor="#00A9C7B7" />
         </shape>
     </item>
 </layer-list>

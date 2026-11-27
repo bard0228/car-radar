@@ -40,6 +40,7 @@
                 android:background="@drawable/bg_glass_pill"
                 android:paddingHorizontal="14dp"
                 android:paddingVertical="7dp"
+                android:tag="lg_pill"
                 android:text="@string/status_idle"
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp"
@@ -51,9 +52,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@drawable/bg_glass_card"
-            android:elevation="4dp"
+            android:elevation="6dp"
             android:orientation="vertical"
-            android:padding="24dp">
+            android:padding="24dp"
+            android:tag="lg_card">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -158,10 +160,11 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
             android:background="@drawable/bg_glass_card"
-            android:elevation="3dp"
+            android:elevation="6dp"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:padding="20dp">
+            android:padding="20dp"
+            android:tag="lg_card">
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -206,7 +209,7 @@
                 android:minHeight="56dp"
                 android:paddingHorizontal="12dp"
                 android:text="--"
-                android:textColor="@color/accent_orange"
+                android:textColor="@color/accent_sage"
                 android:textSize="20sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -217,8 +220,8 @@
             android:layout_width="match_parent"
             android:layout_height="58dp"
             android:layout_marginTop="16dp"
-            android:backgroundTint="@color/accent_orange"
-            app:cornerRadius="20dp"
+            android:backgroundTint="@color/accent_sage"
+            app:cornerRadius="22dp"
             android:text="@string/btn_start"
             android:textColor="#FFFFFF"
             android:textSize="16sp"
@@ -241,7 +244,8 @@
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:tag="lg_card">
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -270,7 +274,8 @@
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:tag="lg_card">
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -306,7 +311,8 @@
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:tag="lg_card">
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -335,7 +341,8 @@
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:tag="lg_card">
 
                 <TextView
                     android:layout_width="wrap_content"

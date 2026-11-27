@@ -212,7 +212,7 @@ class LiquidOrbView(
                 gradRight,
                 cy + ry,
                 if (isOverspeed) Color.parseColor("#FCFFF4F4") else Color.parseColor("#FAFFFFFF"),
-                if (isOverspeed) Color.parseColor("#F0FDE2E2") else Color.parseColor("#EBE9EFF8"),
+                if (isOverspeed) Color.parseColor("#F0FDE2E2") else Color.parseColor("#EBEAF3EE"),
                 Shader.TileMode.CLAMP
             )
             canvas.drawPath(unifiedPath, fillPaint)
@@ -220,7 +220,7 @@ class LiquidOrbView(
             sheenRect.set(cx - rx * 0.68f, cy - ry * 0.80f, cx + rx * 0.48f, cy - ry * 0.14f)
             sheenPaint.shader = LinearGradient(
                 sheenRect.left, sheenRect.top, sheenRect.left, sheenRect.bottom,
-                Color.parseColor("#B8FFFFFF"),
+                Color.parseColor("#C2FFFFFF"),
                 Color.parseColor("#00FFFFFF"),
                 Shader.TileMode.CLAMP
             )
@@ -250,7 +250,7 @@ class LiquidOrbView(
                 cx + r,
                 cy + r,
                 if (isOverspeed) Color.parseColor("#FCFFF4F4") else Color.parseColor("#FAFFFFFF"),
-                if (isOverspeed) Color.parseColor("#F0FDE2E2") else Color.parseColor("#EBE9EFF8"),
+                if (isOverspeed) Color.parseColor("#F0FDE2E2") else Color.parseColor("#EBEAF3EE"),
                 Shader.TileMode.CLAMP
             )
             canvas.drawOval(tmpRect, fillPaint)
@@ -258,7 +258,7 @@ class LiquidOrbView(
             sheenRect.set(cx - r * 0.68f, cy - r * 0.80f, cx + r * 0.48f, cy - r * 0.14f)
             sheenPaint.shader = LinearGradient(
                 sheenRect.left, sheenRect.top, sheenRect.left, sheenRect.bottom,
-                Color.parseColor("#B8FFFFFF"),
+                Color.parseColor("#C2FFFFFF"),
                 Color.parseColor("#00FFFFFF"),
                 Shader.TileMode.CLAMP
             )
@@ -338,7 +338,7 @@ class LiquidOrbView(
             limitPaint.color = when {
                 isNumeric -> Color.parseColor("#C94A4A")
                 hud.camera.kind == CameraKind.RED_LIGHT -> Color.parseColor("#C94A4A")
-                else -> Color.parseColor("#D97736")
+                else -> Color.parseColor("#4A7461")
             }
             limitPaint.alpha = alphaInt
             val limitCenterY = cy + r * (0.44f - 0.06f * (1f - alphaFloat))

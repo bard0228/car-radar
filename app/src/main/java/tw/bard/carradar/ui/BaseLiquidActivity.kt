@@ -58,6 +58,35 @@ abstract class BaseLiquidActivity : AppCompatActivity() {
             )
             insets
         }
+        upgradeOpticalGlassTree(root)
+    }
+
+    protected fun upgradeOpticalGlassTree(view: View) {
+        val density = resources.displayMetrics.density
+        val tag = view.tag as? String
+        when (tag) {
+            "lg_card" -> {
+                view.background = OpticalGlassDrawable(26f * density, density, isPill = false)
+                view.elevation = 6f * density
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    view.outlineAmbientShadowColor = 0x261C2A24
+                    view.outlineSpotShadowColor = 0x2E1C2A24
+                }
+            }
+            "lg_pill" -> {
+                view.background = OpticalGlassDrawable(999f, density, isPill = true)
+                view.elevation = 4f * density
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    view.outlineAmbientShadowColor = 0x201C2A24
+                    view.outlineSpotShadowColor = 0x261C2A24
+                }
+            }
+        }
+        if (view is android.view.ViewGroup) {
+            for (i in 0 until view.childCount) {
+                upgradeOpticalGlassTree(view.getChildAt(i))
+            }
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")

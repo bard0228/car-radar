@@ -28,7 +28,8 @@
             android:contentDescription="返回"
             android:padding="12dp"
             android:scaleType="centerInside"
-            android:src="@drawable/ic_arrow_back" />
+            android:src="@drawable/ic_arrow_back"
+            android:tag="lg_pill" />
 
         <TextView
             android:id="@+id/tvMapInfo"
@@ -39,6 +40,7 @@
             android:background="@drawable/bg_glass_pill"
             android:paddingHorizontal="14dp"
             android:paddingVertical="12dp"
+            android:tag="lg_pill"
             android:text="載入點位中..."
             android:textColor="@color/text_primary"
             android:textSize="13sp" />
@@ -65,6 +67,7 @@
         android:elevation="8dp"
         android:orientation="vertical"
         android:padding="20dp"
+        android:tag="lg_card"
         android:visibility="gone">
 
         <TextView
@@ -94,7 +97,7 @@
                 android:layout_width="0dp"
                 android:layout_height="48dp"
                 android:layout_weight="1"
-                android:backgroundTint="@color/accent_orange"
+                android:backgroundTint="@color/accent_sage"
                 android:text="這個點不用報"
                 android:textColor="#FFFFFF" />
 

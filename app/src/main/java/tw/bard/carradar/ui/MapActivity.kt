@@ -299,7 +299,7 @@ class MapActivity : BaseLiquidActivity() {
             style = Paint.Style.FILL
         }
         val orange = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#D97736")
+            color = Color.parseColor("#5B8270")
             style = Paint.Style.FILL
         }
         canvas.drawCircle(c, c, size * 0.44f, white)

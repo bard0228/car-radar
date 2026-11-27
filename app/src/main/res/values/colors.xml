@@ -1,22 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_bg">#F0EDE6</color>
+    <color name="ic_launcher_bg">#EBF2EE</color>
 
-    <!-- Low-saturation Liquid Glass Palette -->
-    <color name="bg_base">#EEF2F7</color>
+    <!-- Low-saturation Sage Green Optical Liquid Glass Palette -->
+    <color name="bg_base">#EEF4F0</color>
     <color name="bg_surface">#B8FFFFFF</color>
-    <color name="bg_surface_elevated">#DCFFFFFF</color>
-    <color name="glass_stroke">#EBFFFFFF</color>
+    <color name="bg_surface_elevated">#E8F6FAF7</color>
+    <color name="glass_stroke">#F2FFFFFF</color>
+    <color name="glass_outer_hairline">#1A0F172A</color>
+    <color name="glass_divider">#161C2A24</color>
 
-    <color name="text_primary">#1E293B</color>
-    <color name="text_secondary">#64748B</color>
+    <color name="text_primary">#1C2A24</color>
+    <color name="text_secondary">#596C64</color>
 
-    <!-- Desaturated Orange (replaces all Material purple) & Muted Slate Blue -->
-    <color name="accent_orange">#D97736</color>
-    <color name="accent_orange_soft">#F7E3D4</color>
-    <color name="accent_orange_deep">#8A4315</color>
-    <color name="accent_blue">#4B73B5</color>
-    <color name="accent_teal">#2D8A82</color>
-    <color name="alert_red">#C94A4A</color>
-    <color name="track_inactive">#D8E0EB</color>
+    <!-- Primary Low-Saturation Sage Green -->
+    <color name="accent_sage">#5B8270</color>
+    <color name="accent_sage_soft">#DCEAE3</color>
+    <color name="accent_sage_deep">#2B4C3D</color>
+
+    <!-- Legacy aliases mapped to Sage Green for compatibility -->
+    <color name="accent_orange">#5B8270</color>
+    <color name="accent_orange_soft">#DCEAE3</color>
+    <color name="accent_orange_deep">#2B4C3D</color>
+
+    <color name="accent_blue">#58768A</color>
+    <color name="accent_teal">#477865</color>
+    <color name="alert_red">#C45353</color>
+    <color name="track_inactive">#CFDCD5</color>
 </resources>

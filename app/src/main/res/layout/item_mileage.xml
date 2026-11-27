@@ -39,7 +39,7 @@
         android:layout_height="wrap_content"
         android:fontFeatureSettings="tnum"
         android:paddingEnd="10dp"
-        android:textColor="@color/accent_orange"
+        android:textColor="@color/accent_sage"
         android:textSize="18sp"
         android:textStyle="bold" />
 
